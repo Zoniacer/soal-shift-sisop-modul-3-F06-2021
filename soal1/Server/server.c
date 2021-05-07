@@ -17,6 +17,7 @@
 #define EMPAT_KB 4096
 #define MAX_FILE_CHUNK EMPAT_KB
 #define FAIL_OR_SUCCESS_LENGTH 10
+#define LINE_COUNT_STR_LENGTH 20
 char failMsg[] = "false";
 char successMsg[] = "true";
 
@@ -63,7 +64,9 @@ bool login(int socket, char authenticatedUser[]) {
     memset(credentials, 0, MAX_CREDENTIALS_LENGTH);
     int readStatus = read(socket, credentials, MAX_CREDENTIALS_LENGTH);
     FILE * fileAkun = fopen("akun.txt", "r");
-    while(readStatus > 0 && fileAkun && fscanf(fileAkun, "%s", file_credentials) != EOF) {
+    while(readStatus > 0 && fileAkun && fgets(file_credentials, MAX_CREDENTIALS_LENGTH, fileAkun) != NULL) {
+        if(file_credentials[strlen(file_credentials) - 1] == '\n')
+            file_credentials[strlen(file_credentials) - 1] = '\0';
         if(strcmp(credentials, file_credentials) == 0) {
             send(socket, "true", sizeof("true"), 0);
             strcpy(authenticatedUser, credentials);
@@ -110,19 +113,29 @@ bool isFolderExists(char foldername[]) {
     return dir != NULL;
 }
 
+void writeToBinaryFile(FILE * file, int chunk[], int size) {
+    int i=0;
+    // FILE * dbg = fopen("anu.txt", "a");
+    for(; i<size; i++) {
+        if(chunk[i] == -1) break;
+        // fprintf(dbg, "%d ", chunk[i]);
+        fputc(chunk[i], file);
+    }
+}
+
 FILE * readandSavefile(int socket, char filepath[]) {
     chdir("FILES");
     char isEOF[10];
-    char chunk[MAX_FILE_CHUNK + 1];
+    int chunk[MAX_FILE_CHUNK];
     char copy_of_filepath[strlen(filepath) + 1];
     strcpy(copy_of_filepath, filepath);
     FILE * file = fopen(basename(copy_of_filepath), "w");
     do {
         memset(isEOF, 0, sizeof(isEOF));
         read(socket, isEOF, sizeof(isEOF));
-        memset(chunk, 0, MAX_FILE_CHUNK + 1);
+        memset(chunk, 0, sizeof(chunk));
         read(socket, chunk, sizeof(chunk));
-        fprintf(file, "%s", chunk);
+        writeToBinaryFile(file, chunk, sizeof(chunk) / sizeof(int));
     } while (strcmp(isEOF, "true") != 0);
     chdir("../");
     return file;
@@ -175,9 +188,72 @@ int getLineCount(FILE * file) {
     int cnt = 0;
     char c;
     if(file) {
-        while((c = getc(file)) != EOF) cnt++;
+        while((c = getc(file)) != EOF) if(c == '\n') cnt++;
+        rewind(file);
+        return cnt;
     }
-    return cnt;
+    return 0;
+}
+
+void seeFilesTsv(int socket) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    char information[MAX_INFORMATION_LENGTH];
+    sprintf(strLineCount, "%d", lineCount);
+    send(socket, strLineCount, LINE_COUNT_STR_LENGTH, 0);
+    while(file && lineCount--) {
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        fgets(information, MAX_INFORMATION_LENGTH, file);
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        send(socket, information, MAX_INFORMATION_LENGTH, 0);
+    }
+    fclose(file);
+}
+
+bool readBinaryFile(FILE * file, int chunk[], int size) {
+    int i=0, charFromFile;
+    // FILE * dbg = fopen("anu.txt", "a");
+    for(i=0; i<size; i++) {
+        // puts("masuk");
+        charFromFile = fgetc(file);
+        if(charFromFile == EOF) {
+            chunk[i] = -1;
+            break;
+        }
+        // fprintf(dbg, "%d ", charFromFile);
+        chunk[i] = charFromFile;
+    }
+    if(charFromFile == EOF) return false;
+    else return true;
+}
+
+bool readFileandSend(int socket, char filename[]) {
+    chdir("FILES");
+    int chunk[MAX_FILE_CHUNK];
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    printf("Nama buku %s\n", filename);
+    FILE * file = fopen(filename, "r");
+    if(file == NULL) {
+        printf("Tidak bisa membaca file.\n");
+        chdir("../");
+        return false;
+    }
+    while (true) {
+        char isEOF[10];
+        memset(isEOF, 0, sizeof(isEOF));
+        memset(chunk, 0, sizeof(chunk));
+        strcpy(isEOF, (readBinaryFile(file, chunk, sizeof(chunk) / sizeof(int)) ? "false" : "true"));
+        send(socket, isEOF, sizeof(isEOF), 0);
+        send(socket, chunk, sizeof(chunk), 0);
+        if(strcmp(isEOF, "true") == 0)
+            break;
+    };
+    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(socket, message, FAIL_OR_SUCCESS_LENGTH);
+    chdir("../");
+    return strcmp(message, "true") == 0;
 }
 
 void app(int socket) {
@@ -190,6 +266,13 @@ void app(int socket) {
         int readStatus = read(socket, action, MAX_INFORMATION_LENGTH);
         if(readStatus > 0 && strcmp("add", action) == 0) {
             addBuku(socket, authenticatedUser);
+        } else if(readStatus > 0 && strcmp("see", action) == 0) {
+            seeFilesTsv(socket);
+        } else if(readStatus > 0 && strcmp("download", action) == 0) {
+            char filename[MAX_INFORMATION_LENGTH];
+            memset(filename, 0, sizeof(filename));
+            read(socket, filename, MAX_INFORMATION_LENGTH);
+            readFileandSend(socket, filename);
         }
     }
 }
