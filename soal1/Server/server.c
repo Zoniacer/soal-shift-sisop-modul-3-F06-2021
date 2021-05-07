@@ -9,12 +9,16 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/sendfile.h>
+#include <libgen.h>
 #define PORT 1111
 #define MAX_CONN 50
 #define MAX_CREDENTIALS_LENGTH 100
 #define MAX_INFORMATION_LENGTH 200
 #define EMPAT_KB 4096
 #define MAX_FILE_CHUNK EMPAT_KB
+#define FAIL_OR_SUCCESS_LENGTH 10
+char failMsg[] = "false";
+char successMsg[] = "true";
 
 bool isFileExists(char filename[]) {
     return access(filename, F_OK) == 0;
@@ -61,7 +65,6 @@ bool login(int socket, char authenticatedUser[]) {
     FILE * fileAkun = fopen("akun.txt", "r");
     while(readStatus > 0 && fileAkun && fscanf(fileAkun, "%s", file_credentials) != EOF) {
         if(strcmp(credentials, file_credentials) == 0) {
-            printf("Akun %s telah login\n", strtok(credentials, ":"));
             send(socket, "true", sizeof("true"), 0);
             strcpy(authenticatedUser, credentials);
             fclose(fileAkun);
@@ -107,10 +110,13 @@ bool isFolderExists(char foldername[]) {
     return dir != NULL;
 }
 
-FILE * readandSavefile(int socket, char filename[]) {
+FILE * readandSavefile(int socket, char filepath[]) {
+    chdir("FILES");
     char isEOF[10];
     char chunk[MAX_FILE_CHUNK + 1];
-    FILE * file = fopen(filename, "w");
+    char copy_of_filepath[strlen(filepath) + 1];
+    strcpy(copy_of_filepath, filepath);
+    FILE * file = fopen(basename(copy_of_filepath), "w");
     do {
         memset(isEOF, 0, sizeof(isEOF));
         read(socket, isEOF, sizeof(isEOF));
@@ -118,45 +124,60 @@ FILE * readandSavefile(int socket, char filename[]) {
         read(socket, chunk, sizeof(chunk));
         fprintf(file, "%s", chunk);
     } while (strcmp(isEOF, "true") != 0);
+    chdir("../");
     return file;
 }
 
-bool addDataBuku(int socket, char *filename) {
+void logging(const char event[], const char filepath[], char authenticatedUser[]) {
+    FILE * logFile = fopen("running.log", "a");
+    char copy_of_filepath[strlen(filepath) + 1];
+    strcpy(copy_of_filepath, filepath);
+    if(logFile) {
+        fprintf(logFile, "%s : %s (%s)\n", event, basename(copy_of_filepath), authenticatedUser);
+        fclose(logFile);
+    }
+}
+
+bool addDataBuku(int socket, char *filepath) {
     char information[MAX_INFORMATION_LENGTH];
     memset(information, 0, MAX_INFORMATION_LENGTH);
     int readStatus = read(socket, information, MAX_INFORMATION_LENGTH);
-    printf("Buku %s telah didaftarkan.\n", information);
     FILE * fileFile = fopen("files.tsv", "a");
     if(fileFile && readStatus > 0 && fprintf(fileFile, "%s\n", information)) {
         fclose(fileFile);
-        filename = strtok(information, "|");
+        printf("Buku %s telah didaftarkan.\n", information);
+        strcpy(filepath, information);
         return true;
     }
     fclose(fileFile);
     return false;
 }
 
-void logging(const char event[], const char filename[], char authenticatedUser[]) {
-    FILE * logFile = fopen("running.log", "a");
-    if(logFile) {
-        fprintf(logFile, "%s : %s (%s)\n", event, filename, authenticatedUser);
-        fclose(logFile);
-    }
-}
-
 void addBuku(int socket, char authenticatedUser[]) {
-    char *filename;
-    if(!addDataBuku(socket, filename)) {
-        send(socket, "false", sizeof("false"), 0);
-        return false;
+    char filepath[MAX_INFORMATION_LENGTH];
+    if(!addDataBuku(socket, filepath)) {
+        send(socket, failMsg, sizeof(failMsg), 0);
+        return;
     }
-    FILE * file = readandSavefile(socket, filename);
+    char * token = strtok(filepath, "|");
+    token = strtok(NULL, "|");
+    token = strtok(NULL, "|");
+    FILE * file = readandSavefile(socket, token);
     if(file == NULL) {
-        send(socket, "false", sizeof("false"), 0);
+        send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
     }
     fclose(file);
-    send(socket, "true", sizeof("true"), 0);
-    logging("Tambah", filename, authenticatedUser);
+    send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+    logging("Tambah", token, authenticatedUser);
+}
+
+int getLineCount(FILE * file) {
+    int cnt = 0;
+    char c;
+    if(file) {
+        while((c = getc(file)) != EOF) cnt++;
+    }
+    return cnt;
 }
 
 void app(int socket) {
