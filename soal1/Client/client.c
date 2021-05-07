@@ -15,6 +15,8 @@
 #define FAIL_OR_SUCCESS_LENGTH 10
 #define MAX_CREDENTIALS_LENGTH 100
 #define LINE_COUNT_STR_LENGTH 20
+char failMsg[] = "false";
+char successMsg[] = "true";
 
 bool setupClient(int * sock) {
     struct sockaddr_in address;
@@ -135,12 +137,17 @@ void writeToBinaryFile(FILE * file, int chunk[], int size) {
     }
 }
 
-FILE * readandSavefile(int socket, char filepath[]) {
+FILE * readandSavefile(int socket, char filename[]) {
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(socket, message, FAIL_OR_SUCCESS_LENGTH);
+    if(strcmp(message, failMsg) == 0) {
+        printf("File tidak ada di dalam server.\n");
+        return NULL;
+    }
     char isEOF[10];
     int chunk[MAX_FILE_CHUNK];
-    char copy_of_filepath[strlen(filepath) + 1];
-    strcpy(copy_of_filepath, filepath);
-    FILE * file = fopen(basename(copy_of_filepath), "w");
+    FILE * file = fopen(filename, "w");
     do {
     // printf("mantap\n");
         memset(isEOF, 0, sizeof(isEOF));
@@ -149,6 +156,8 @@ FILE * readandSavefile(int socket, char filepath[]) {
         read(socket, chunk, sizeof(chunk));
         writeToBinaryFile(file, chunk, sizeof(chunk) / sizeof(int));
     } while (strcmp(isEOF, "true") != 0);
+    if(file) printf("File %s selesai didownload.\n", filename);
+    else printf("File %s gagal didownload.\n", filename);
     return file;
 }
 
@@ -207,7 +216,7 @@ void receiveFilesTsv(int socket) {
     char strLineCount[LINE_COUNT_STR_LENGTH];
     read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
     int lineCount = atoi(strLineCount);
-    printf("%d\n", lineCount);
+    // printf("%d\n", lineCount);
     while(lineCount--) {
         char information[MAX_INFORMATION_LENGTH];
         memset(information, 0, MAX_INFORMATION_LENGTH);
@@ -230,6 +239,14 @@ int main(int argc, char const *argv[]) {
     while(true) {
         char action[MAX_INFORMATION_LENGTH];
         memset(action, 0, MAX_INFORMATION_LENGTH);
+        printf("\nList perintah :\n");
+        printf("1. add\n");
+        printf("2. download x (x: nama file yang ingin didownload)\n");
+        // printf("3. delete\n");
+        printf("4. see\n");
+        // printf("5. find x (x: nama file yang ingin dicari)\n");
+        printf("6. exit\n");
+        printf("Masukkan perintah : ");
         scanf("%s", action);
         getchar();
         if(strcmp("add", action) == 0) {
@@ -243,7 +260,11 @@ int main(int argc, char const *argv[]) {
             char filename[MAX_INFORMATION_LENGTH];
             getlineRemoveNewline(filename);
             send(sock, filename, sizeof(filename), 0);
-            fclose(readandSavefile(sock, filename));
+            FILE * buku = readandSavefile(sock, filename);
+            if(buku) fclose(buku);
+        } else if(strcmp("exit", action) == 0) {
+            send(sock, action, sizeof(action), 0);
+            exit(EXIT_SUCCESS);
         }
     }
 

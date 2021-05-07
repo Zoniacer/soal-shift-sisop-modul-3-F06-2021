@@ -229,17 +229,43 @@ bool readBinaryFile(FILE * file, int chunk[], int size) {
     else return true;
 }
 
+bool isBookExistInTsv(char filename[]) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, sizeof information);
+        if(fgets(information, sizeof information, file) == NULL)
+            continue;
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        char * publisher = strtok(information, "|");
+        char * tahun = strtok(NULL, "|");
+        char * filepath = strtok(NULL, "|");
+        char copy_of_filepath[strlen(filepath) + 1];
+        strcpy(copy_of_filepath, filepath);
+        char * filenameInTsv = basename(copy_of_filepath);
+        if(strcmp(filenameInTsv, filename) == 0) return true;
+    }
+    return false;
+}
+
 bool readFileandSend(int socket, char filename[]) {
-    chdir("FILES");
     int chunk[MAX_FILE_CHUNK];
     char message[FAIL_OR_SUCCESS_LENGTH];
-    printf("Nama buku %s\n", filename);
+    // printf("Nama buku %s\n", filename);
+    if(!isBookExistInTsv(filename)) {
+        send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+        return false;
+    }
+    chdir("FILES");
     FILE * file = fopen(filename, "r");
     if(file == NULL) {
         printf("Tidak bisa membaca file.\n");
         chdir("../");
         return false;
     }
+    send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
     while (true) {
         char isEOF[10];
         memset(isEOF, 0, sizeof(isEOF));
@@ -250,8 +276,6 @@ bool readFileandSend(int socket, char filename[]) {
         if(strcmp(isEOF, "true") == 0)
             break;
     };
-    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
-    read(socket, message, FAIL_OR_SUCCESS_LENGTH);
     chdir("../");
     return strcmp(message, "true") == 0;
 }
@@ -273,7 +297,8 @@ void app(int socket) {
             memset(filename, 0, sizeof(filename));
             read(socket, filename, MAX_INFORMATION_LENGTH);
             readFileandSend(socket, filename);
-        }
+        } else if(readStatus > 0 && strcmp("exit", action) == 0)
+            return;
     }
 }
 
@@ -291,15 +316,15 @@ int main() {
     if(!isFileExists("files.tsv")) createFile("files.tsv");
     if(!isFolderExists("FILES")) mkdir("FILES", S_IRWXU);
 
-    while(true) {
+    // while(true) {
         int new_socket;
         if(!acceptConnection(&new_socket, &server_fd, &address)) {
             printf("Tidak dapat menerima koneksi.\n");
-            continue;
+            // continue;
         }
-        printf("Koneksi diterima.\nAkan dibuatkan thread baru.\n");
+        printf("Koneksi diterima.\n");
         app(new_socket);
         // pthread_create(&tid, NULL, server, (void *)&new_socket);
-    }
+    // }
     return 0;
 }
