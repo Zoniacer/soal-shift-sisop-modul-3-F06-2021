@@ -226,6 +226,17 @@ void receiveFilesTsv(int socket) {
     }
 }
 
+void deleteBook(int sock) {
+    char filename[MAX_INFORMATION_LENGTH];
+    getlineRemoveNewline(filename);
+    send(sock, filename, sizeof(filename), 0);
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(sock, message, FAIL_OR_SUCCESS_LENGTH);
+    if(strcmp(message, failMsg)) printf("Gagal menghapus file.\n");
+    else printf("Sukses menghapus file.\n");
+}
+
 int main(int argc, char const *argv[]) {
     int sock = 0, valread;
     if(!setupClient(&sock)) {
@@ -242,7 +253,7 @@ int main(int argc, char const *argv[]) {
         printf("\nList perintah :\n");
         printf("1. add\n");
         printf("2. download x (x: nama file yang ingin didownload)\n");
-        // printf("3. delete\n");
+        printf("3. delete x (x: nama file yang ingin dihapus)\n");
         printf("4. see\n");
         // printf("5. find x (x: nama file yang ingin dicari)\n");
         printf("6. exit\n");
@@ -265,7 +276,10 @@ int main(int argc, char const *argv[]) {
         } else if(strcmp("exit", action) == 0) {
             send(sock, action, sizeof(action), 0);
             exit(EXIT_SUCCESS);
-        }
+        } else if(strcmp("delete", action) == 0) {
+            send(sock, action, MAX_INFORMATION_LENGTH, 0);
+            deleteBook(sock);
+        } 
     }
 
     // send(sock , hello , strlen(hello) , 0 );

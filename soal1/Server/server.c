@@ -280,6 +280,14 @@ bool readFileandSend(int socket, char filename[]) {
     return strcmp(message, "true") == 0;
 }
 
+void deleteBook(int socket, char filename[]) {
+    chdir("FILES");
+    char newfilename[MAX_INFORMATION_LENGTH];
+    sprintf(newfilename, "old-%s", filename);
+    send(socket, (rename(filename, newfilename) != 0 ? successMsg : failMsg), FAIL_OR_SUCCESS_LENGTH, 0);
+    chdir("../");
+}
+
 void app(int socket) {
     char authenticatedUser[MAX_CREDENTIALS_LENGTH];
     while(!authentication(socket, authenticatedUser));
@@ -299,6 +307,12 @@ void app(int socket) {
             readFileandSend(socket, filename);
         } else if(readStatus > 0 && strcmp("exit", action) == 0)
             return;
+         else if(readStatus > 0 && strcmp("delete", action) == 0) {
+            char filename[MAX_INFORMATION_LENGTH];
+            memset(filename, 0, sizeof(filename));
+            read(socket, filename, MAX_INFORMATION_LENGTH);
+            deleteBook(socket, filename);
+        }
     }
 }
 
