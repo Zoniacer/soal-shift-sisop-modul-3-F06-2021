@@ -10,7 +10,6 @@
 #include<ctype.h>
 
 pthread_mutex_t signal;
-int counter_files=1;
 char catepath[100][100];
 
 char *checkName(char *dir){
@@ -47,8 +46,9 @@ char *checkExt(char *dir){
 
 void* categorize(void *arg){
     char *src = (char *)arg;
-    if(access(src, F_OK)!=0){
-//    	printf("File %d : Sad, gagal :(\n",counter_files);
+    struct stat path_stat;
+    stat(src, &path_stat);
+    if(access(src, F_OK)!=0|| S_ISDIR(path_stat.st_mode)){
 	pthread_mutex_lock(&signal);
     	pthread_mutex_unlock(&signal);
     	return (void *) 0;
@@ -72,7 +72,6 @@ void* categorize(void *arg){
     strcat(destP, srcExt);
     strcat(destP, "/");
     strcat(destP, srcName);
-//    printf("File %d : Berhasil Dikategorikan\n",counter_files);
     pthread_mutex_lock(&signal);
     if(rename(srcP, destP) != 0){
         fprintf(stderr,"error: %s\n\n",strerror(errno));
@@ -80,7 +79,6 @@ void* categorize(void *arg){
     pthread_mutex_unlock(&signal);
     return (void *) 1;
     }
-    counter_files++;
     pthread_mutex_lock(&signal);
     pthread_mutex_unlock(&signal);
     
@@ -188,5 +186,6 @@ int main(int argc, char *argv[]){
         return 0;       
     }
 }
+
 
 
