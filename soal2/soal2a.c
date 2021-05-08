@@ -24,7 +24,7 @@ int M1[4][3],// = {{1, 2, 3},
     HASIL[4][6];
 
 void* hitungmatriks (void *arg) {
-    
+
     pthread_t id = pthread_self();
 
     for(int i = 0; i<ROW; i++){
@@ -63,16 +63,16 @@ int main () {
     pthread_join(tid[2], NULL);
 
     printf("\nMATRIKS HASIL\n");
-    int (*share_matriks)[4];
+    int *share_matriks;
 
     key_t key = 1234;
     int shmid = shmget(key, sizeof(int[ROW][COL]), IPC_CREAT | 0666);
-    share_matriks = shmat(shmid, NULL, 0);
+    share_matriks = (int*)shmat(shmid, NULL, 0);
 
     for (i = 0; i < ROW; i++){
         for (j = 0; j < COL; j++){
-            share_matriks[i][j] = HASIL[i][j];
-            printf("%d\t",share_matriks[i][j]);
+            share_matriks[i*COL+j] = HASIL[i][j];
+            printf("%d\t",share_matriks[i*COL+j]);
         }
         printf("\n");   
     }
