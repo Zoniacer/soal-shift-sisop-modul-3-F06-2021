@@ -29,16 +29,16 @@ void* hitungmatriks (void *arg) {
 
     if (pthread_equal(id, tid[0]))
         for (int i = 0; i < COL; i++) 
-            HASIL[0][i] = M1[0][0]*M2[0][i] + M1[0][1]*M2[1][i];
+            HASIL[0][i] = M1[0][0]*M2[0][i] + M1[0][1]*M2[1][i] + M1[0][2]*M2[2][i];
     else if (pthread_equal(id, tid[1]))
         for (int i = 0; i < COL; i++)
-            HASIL[1][i] = M1[1][0]*M2[0][i] + M1[1][1]*M2[1][i];
+            HASIL[1][i] = M1[1][0]*M2[0][i] + M1[1][1]*M2[1][i]+ M1[1][2]*M2[2][i];
     else if (pthread_equal(id, tid[2]))
         for (int i = 0; i < COL; i++)
-            HASIL[2][i] = M1[2][0]*M2[0][i] + M1[2][1]*M2[1][i];
+            HASIL[2][i] = M1[2][0]*M2[0][i] + M1[2][1]*M2[1][i]+ M1[2][2]*M2[2][i];
     else if (pthread_equal(id, tid[3]))
         for (int i = 0; i < COL; i++)
-            HASIL[3][i] = M1[3][0]*M2[0][i] + M1[3][1]*M2[1][i];
+            HASIL[3][i] = M1[3][0]*M2[0][i] + M1[3][1]*M2[1][i]+ M1[3][2]*M2[2][i];
 
 }
 
