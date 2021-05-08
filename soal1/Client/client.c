@@ -17,6 +17,7 @@
 #define LINE_COUNT_STR_LENGTH 20
 char failMsg[] = "false";
 char successMsg[] = "true";
+#define invalidCmd "\nMaaf, command yang anda masukkan tidak valid\n"
 
 bool setupClient(int * sock) {
     struct sockaddr_in address;
@@ -88,15 +89,12 @@ bool login(int socket) {
 
 bool readBinaryFile(FILE * file, int chunk[], int size) {
     int i=0, charFromFile;
-    // FILE * dbg = fopen("anu.txt", "a");
     for(i=0; i<size; i++) {
-        // puts("masuk");
         charFromFile = fgetc(file);
         if(charFromFile == EOF) {
             chunk[i] = -1;
             break;
         }
-        // fprintf(dbg, "%d ", charFromFile);
         chunk[i] = charFromFile;
     }
     if(charFromFile == EOF) return false;
@@ -128,10 +126,8 @@ bool readFileandSend(int socket, char filename[]) {
 
 void writeToBinaryFile(FILE * file, int chunk[], int size) {
     int i=0;
-    // FILE * dbg = fopen("anu.txt", "a");
     for(; i<size; i++) {
         if(chunk[i] == -1) break;
-        // fprintf(dbg, "%d ", chunk[i]);
         fputc(chunk[i], file);
     }
 }
@@ -148,7 +144,6 @@ FILE * readandSavefile(int socket, char filename[]) {
     int chunk[MAX_FILE_CHUNK];
     FILE * file = fopen(filename, "w");
     do {
-    // printf("mantap\n");
         memset(isEOF, 0, sizeof(isEOF));
         read(socket, isEOF, sizeof(isEOF));
         memset(chunk, 0, sizeof(chunk));
@@ -184,7 +179,7 @@ bool authentication(int sock) {
     const char loginPrompt[] = "Silahkan daftar atau login terlebih dahulu.";
     puts(loginPrompt);
     char action[10];
-    printf("(login / register) : ");
+    printf("(login / register / exit) : ");
     getlineRemoveNewline(action);
     if(strcmp(action, "register") == 0) {
         send(sock , action, strlen(action) , 0);
@@ -192,7 +187,10 @@ bool authentication(int sock) {
     } else if(strcmp(action, "login") == 0) {
         send(sock , action, strlen(action) , 0);
         return login(sock);
-    }
+    } else if(strcmp(action, "exit") == 0) {
+        close(sock);
+        exit(EXIT_SUCCESS);
+    } else puts(invalidCmd);
     return false;
 }
 
@@ -216,13 +214,27 @@ void receiveFilesTsv(int socket) {
     char strLineCount[LINE_COUNT_STR_LENGTH];
     read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
     int lineCount = atoi(strLineCount);
-    // printf("%d\n", lineCount);
     while(lineCount--) {
         char information[MAX_INFORMATION_LENGTH];
         memset(information, 0, MAX_INFORMATION_LENGTH);
         read(socket, information, MAX_INFORMATION_LENGTH);
         printBookInfo(information);
-        // puts(information);
+    }
+}
+
+void findSpecificName(int socket) {
+    char filename[MAX_INFORMATION_LENGTH];
+    getlineRemoveNewline(filename);
+    send(socket, filename, sizeof(filename), 0);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
+    int lineCount = atoi(strLineCount);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        read(socket, information, MAX_INFORMATION_LENGTH);
+        if(strcmp(information, failMsg) == 0) break;
+        printBookInfo(information);
     }
 }
 
@@ -237,6 +249,43 @@ void deleteBook(int sock) {
     else printf("Sukses menghapus file.\n");
 }
 
+void printPrompt() {
+    printf("\nList perintah :\n");
+    printf("1. add\n");
+    printf("2. download x (x: nama file yang ingin didownload)\n");
+    printf("3. delete x (x: nama file yang ingin dihapus)\n");
+    printf("4. see\n");
+    printf("5. find x (x: nama file yang ingin dicari)\n");
+    printf("6. exit\n");
+    printf("Masukkan perintah : ");
+}
+
+void executePrompt(int sock, char action[]) {
+    if(strcmp("add", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        addBuku(sock);
+    } else if(strcmp("see", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        receiveFilesTsv(sock);
+    } else if(strcmp("download", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        char filename[MAX_INFORMATION_LENGTH];
+        getlineRemoveNewline(filename);
+        send(sock, filename, sizeof(filename), 0);
+        FILE * buku = readandSavefile(sock, filename);
+        if(buku) fclose(buku);
+    } else if(strcmp("exit", action) == 0) {
+        close(sock);
+        exit(EXIT_SUCCESS);
+    } else if(strcmp("delete", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        deleteBook(sock);
+    } else if(strcmp("find", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        findSpecificName(sock);
+    } else puts(invalidCmd);
+}
+
 int main(int argc, char const *argv[]) {
     int sock = 0, valread;
     if(!setupClient(&sock)) {
@@ -244,48 +293,27 @@ int main(int argc, char const *argv[]) {
         exit(EXIT_FAILURE);
     }
     
+    puts("Menunggu hingga koneksi diterima.");
+    char acceptedConnection[FAIL_OR_SUCCESS_LENGTH];
+    memset(acceptedConnection, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(sock, acceptedConnection, FAIL_OR_SUCCESS_LENGTH);
+    if(strcmp(acceptedConnection, successMsg) == 0) {
+        puts("Koneksi diterima.");
+    } else {
+        puts("Koneksi gagal.");
+        exit(EXIT_FAILURE);
+    }
+
     while(!authentication(sock));
 
     printf("User authenticated.\n");
     while(true) {
         char action[MAX_INFORMATION_LENGTH];
         memset(action, 0, MAX_INFORMATION_LENGTH);
-        printf("\nList perintah :\n");
-        printf("1. add\n");
-        printf("2. download x (x: nama file yang ingin didownload)\n");
-        printf("3. delete x (x: nama file yang ingin dihapus)\n");
-        printf("4. see\n");
-        // printf("5. find x (x: nama file yang ingin dicari)\n");
-        printf("6. exit\n");
-        printf("Masukkan perintah : ");
+        printPrompt();
         scanf("%s", action);
         getchar();
-        if(strcmp("add", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            addBuku(sock);
-        } else if(strcmp("see", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            receiveFilesTsv(sock);
-        } else if(strcmp("download", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            char filename[MAX_INFORMATION_LENGTH];
-            getlineRemoveNewline(filename);
-            send(sock, filename, sizeof(filename), 0);
-            FILE * buku = readandSavefile(sock, filename);
-            if(buku) fclose(buku);
-        } else if(strcmp("exit", action) == 0) {
-            send(sock, action, sizeof(action), 0);
-            exit(EXIT_SUCCESS);
-        } else if(strcmp("delete", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            deleteBook(sock);
-        } 
+        executePrompt(sock, action);
     }
-
-    // send(sock , hello , strlen(hello) , 0 );
-    // printf("Hello message sent\n");
-    // valread = read(sock , buffer, 1024);
-    // printf("%s\n", buffer);
-    // printf("%s\n",buffer );
     return 0;
 }
