@@ -51,7 +51,7 @@ bool setupServer(int listen_port, int * server_fd, struct sockaddr_in * address)
       
     success &= bind(*server_fd, (const struct sockaddr *)address, sizeof(*address)) >= 0;
 
-    return success & (listen(*server_fd, 3) == 0);
+    return success & (listen(*server_fd, 10) == 0);
 }
 
 bool acceptConnection(int * new_socket, int * server_fd, struct sockaddr_in * address) {
@@ -349,7 +349,8 @@ void deleteBook(int socket, char filename[], char authenticatedUser[]) {
     send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
 }
 
-void app(int socket) {
+void * app(void * vargp) {
+    int socket = *((int *)vargp);
     char authenticatedUser[MAX_CREDENTIALS_LENGTH];
     while(!authentication(socket, authenticatedUser));
     printf("User telah terautentikasi\n");
@@ -372,7 +373,7 @@ void app(int socket) {
             read(socket, filename, MAX_INFORMATION_LENGTH);
             readFileandSend(socket, filename);
         } else if(readStatus > 0 && strcmp("exit", action) == 0)
-            return;
+            return NULL;
          else if(readStatus > 0 && strcmp("delete", action) == 0) {
             char filename[MAX_INFORMATION_LENGTH];
             memset(filename, 0, sizeof(filename));
@@ -380,6 +381,7 @@ void app(int socket) {
             deleteBook(socket, filename, authenticatedUser);
         }
     }
+    return NULL;
 }
 
 int main() {
@@ -396,15 +398,18 @@ int main() {
     if(!isFileExists("files.tsv")) createFile("files.tsv");
     if(!isFolderExists("FILES")) mkdir("FILES", S_IRWXU);
 
-    // while(true) {
+    while(true) {
         int new_socket;
         if(!acceptConnection(&new_socket, &server_fd, &address)) {
             printf("Tidak dapat menerima koneksi.\n");
-            // continue;
+            continue;
         }
-        printf("Koneksi diterima.\n");
-        app(new_socket);
-        // pthread_create(&tid, NULL, server, (void *)&new_socket);
-    // }
+        printf("Koneksi baru diterima.\n");
+        send(new_socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+        // app(new_socket);
+        pthread_create(&tid, NULL, app, (void *)&new_socket);
+        pthread_join(tid, NULL);
+        printf("Koneksi selesai.\n");
+    }
     return 0;
 }

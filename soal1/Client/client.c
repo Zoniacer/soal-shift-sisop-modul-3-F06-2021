@@ -239,7 +239,6 @@ void findSpecificName(int socket) {
         memset(information, 0, MAX_INFORMATION_LENGTH);
         read(socket, information, MAX_INFORMATION_LENGTH);
         if(strcmp(information, failMsg) == 0) break;
-        
         printBookInfo(information);
         // puts(information);
     }
@@ -256,30 +255,19 @@ void deleteBook(int sock) {
     else printf("Sukses menghapus file.\n");
 }
 
-int main(int argc, char const *argv[]) {
-    int sock = 0, valread;
-    if(!setupClient(&sock)) {
-        printf("Gagal inisiasi client\n");
-        exit(EXIT_FAILURE);
-    }
-    
-    while(!authentication(sock));
+void printPrompt() {
+    printf("\nList perintah :\n");
+    printf("1. add\n");
+    printf("2. download x (x: nama file yang ingin didownload)\n");
+    printf("3. delete x (x: nama file yang ingin dihapus)\n");
+    printf("4. see\n");
+    printf("5. find x (x: nama file yang ingin dicari)\n");
+    printf("6. exit\n");
+    printf("Masukkan perintah : ");
+}
 
-    printf("User authenticated.\n");
-    while(true) {
-        char action[MAX_INFORMATION_LENGTH];
-        memset(action, 0, MAX_INFORMATION_LENGTH);
-        printf("\nList perintah :\n");
-        printf("1. add\n");
-        printf("2. download x (x: nama file yang ingin didownload)\n");
-        printf("3. delete x (x: nama file yang ingin dihapus)\n");
-        printf("4. see\n");
-        printf("5. find x (x: nama file yang ingin dicari)\n");
-        printf("6. exit\n");
-        printf("Masukkan perintah : ");
-        scanf("%s", action);
-        getchar();
-        if(strcmp("add", action) == 0) {
+void executePrompt(int sock, char action[]) {
+    if(strcmp("add", action) == 0) {
             send(sock, action, MAX_INFORMATION_LENGTH, 0);
             addBuku(sock);
         } else if(strcmp("see", action) == 0) {
@@ -293,7 +281,7 @@ int main(int argc, char const *argv[]) {
             FILE * buku = readandSavefile(sock, filename);
             if(buku) fclose(buku);
         } else if(strcmp("exit", action) == 0) {
-            send(sock, action, sizeof(action), 0);
+            send(sock, action, MAX_INFORMATION_LENGTH, 0);
             exit(EXIT_SUCCESS);
         } else if(strcmp("delete", action) == 0) {
             send(sock, action, MAX_INFORMATION_LENGTH, 0);
@@ -302,6 +290,36 @@ int main(int argc, char const *argv[]) {
             send(sock, action, MAX_INFORMATION_LENGTH, 0);
             findSpecificName(sock);
         }
+}
+
+int main(int argc, char const *argv[]) {
+    int sock = 0, valread;
+    if(!setupClient(&sock)) {
+        printf("Gagal inisiasi client\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    puts("Menunggu hingga koneksi diterima.");
+    char acceptedConnection[FAIL_OR_SUCCESS_LENGTH];
+    memset(acceptedConnection, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(sock, acceptedConnection, FAIL_OR_SUCCESS_LENGTH);
+    if(strcmp(acceptedConnection, successMsg) == 0) {
+        puts("Koneksi diterima.");
+    } else {
+        puts("Koneksi gagal.");
+        exit(EXIT_FAILURE);
+    }
+
+    while(!authentication(sock));
+
+    printf("User authenticated.\n");
+    while(true) {
+        char action[MAX_INFORMATION_LENGTH];
+        memset(action, 0, MAX_INFORMATION_LENGTH);
+        printPrompt();
+        scanf("%s", action);
+        getchar();
+        executePrompt(sock, action);
     }
 
     // send(sock , hello , strlen(hello) , 0 );
