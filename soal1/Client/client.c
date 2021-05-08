@@ -226,6 +226,25 @@ void receiveFilesTsv(int socket) {
     }
 }
 
+void findSpecificName(int socket) {
+    char filename[MAX_INFORMATION_LENGTH];
+    getlineRemoveNewline(filename);
+    send(socket, filename, sizeof(filename), 0);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
+    int lineCount = atoi(strLineCount);
+    // printf("%d\n", lineCount);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        read(socket, information, MAX_INFORMATION_LENGTH);
+        if(strcmp(information, failMsg) == 0) break;
+        
+        printBookInfo(information);
+        // puts(information);
+    }
+}
+
 void deleteBook(int sock) {
     char filename[MAX_INFORMATION_LENGTH];
     getlineRemoveNewline(filename);
@@ -255,7 +274,7 @@ int main(int argc, char const *argv[]) {
         printf("2. download x (x: nama file yang ingin didownload)\n");
         printf("3. delete x (x: nama file yang ingin dihapus)\n");
         printf("4. see\n");
-        // printf("5. find x (x: nama file yang ingin dicari)\n");
+        printf("5. find x (x: nama file yang ingin dicari)\n");
         printf("6. exit\n");
         printf("Masukkan perintah : ");
         scanf("%s", action);
@@ -279,7 +298,10 @@ int main(int argc, char const *argv[]) {
         } else if(strcmp("delete", action) == 0) {
             send(sock, action, MAX_INFORMATION_LENGTH, 0);
             deleteBook(sock);
-        } 
+        } else if(strcmp("find", action) == 0) {
+            send(sock, action, MAX_INFORMATION_LENGTH, 0);
+            findSpecificName(sock);
+        }
     }
 
     // send(sock , hello , strlen(hello) , 0 );

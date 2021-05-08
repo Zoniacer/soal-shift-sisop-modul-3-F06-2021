@@ -212,6 +212,33 @@ void seeFilesTsv(int socket) {
     fclose(file);
 }
 
+void findSpecificName(int socket, char subStrName[]) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    char information[MAX_INFORMATION_LENGTH];
+    sprintf(strLineCount, "%d", lineCount);
+    send(socket, strLineCount, LINE_COUNT_STR_LENGTH, 0);
+    while(file && lineCount--) {
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        fgets(information, MAX_INFORMATION_LENGTH, file);
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        char copy_of_information[strlen(information) + 1];
+        strcpy(copy_of_information, information);
+        char * publisher = strtok(information, "|");
+        char * tahun = strtok(NULL, "|");
+        char * filepath = strtok(NULL, "|");
+        char copy_of_filepath[strlen(filepath) + 1];
+        strcpy(copy_of_filepath, filepath);
+        char * filenameInTsv = basename(copy_of_filepath);
+        if(strstr(filenameInTsv, subStrName) == NULL) continue;
+        send(socket, copy_of_information, MAX_INFORMATION_LENGTH, 0);
+    }
+    send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+    fclose(file);
+}
+
 bool readBinaryFile(FILE * file, int chunk[], int size) {
     int i=0, charFromFile;
     // FILE * dbg = fopen("anu.txt", "a");
@@ -333,6 +360,11 @@ void app(int socket) {
             addBuku(socket, authenticatedUser);
         } else if(readStatus > 0 && strcmp("see", action) == 0) {
             seeFilesTsv(socket);
+        } else if(readStatus > 0 && strcmp("find", action) == 0) {
+            char subfilename[MAX_INFORMATION_LENGTH];
+            memset(subfilename, 0, sizeof(subfilename));
+            read(socket, subfilename, MAX_INFORMATION_LENGTH);
+            findSpecificName(socket, subfilename);
         } else if(readStatus > 0 && strcmp("download", action) == 0) {
             char filename[MAX_INFORMATION_LENGTH];
             memset(filename, 0, sizeof(filename));
