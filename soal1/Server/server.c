@@ -334,7 +334,7 @@ void deleteFromTsv(char filename[]) {
     remove("files.tsv"); rename("files2.tsv", "files.tsv");
 }
 
-void deleteBook(int socket, char filename[]) {
+void deleteBook(int socket, char filename[], char authenticatedUser[]) {
     if(!isBookExistInTsv(filename)) {
         send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
         return;
@@ -345,6 +345,7 @@ void deleteBook(int socket, char filename[]) {
     send(socket, (rename(filename, newfilename) != 0 ? successMsg : failMsg), FAIL_OR_SUCCESS_LENGTH, 0);
     chdir("../");
     deleteFromTsv(filename);
+    logging("Hapus", filename, authenticatedUser);
     send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
 }
 
@@ -376,7 +377,7 @@ void app(int socket) {
             char filename[MAX_INFORMATION_LENGTH];
             memset(filename, 0, sizeof(filename));
             read(socket, filename, MAX_INFORMATION_LENGTH);
-            deleteBook(socket, filename);
+            deleteBook(socket, filename, authenticatedUser);
         }
     }
 }
