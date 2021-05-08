@@ -14,29 +14,29 @@ pthread_t tid[4]; // Deklarasi jumlah thread
 
 
 //Deklarasi Matriks
-int M1[4][3] = { {1, 2, 3},
-                {3, 4, 5},
-                {5, 6, 7},
-                {7, 8, 9}},
-    M2[3][6] = { {1, 3, 5, 7, 9, 11},
-                {2, 4, 6, 8, 10},
-                {3, 6, 9, 12, 15, 18}},
+int M1[4][3],// = {{1, 2, 3},
+            //    {3, 4, 5},
+            //   {5, 6, 7},
+            //    {7, 8, 9}},
+    M2[3][6],// = {{1, 3, 5, 7, 9, 1},
+            //    {2, 4, 6, 8, 5, 4},
+            //    {1, 2, 3, 4, 3, 4}},
     HASIL[4][6];
 
 void* hitungmatriks (void *arg) {
 
     pthread_t id = pthread_self();
 
-    if (pthread_equal(id, tid[0]))      // baris 1 matriks Hasil
+    if (pthread_equal(id, tid[0]))
         for (int i = 0; i < COL; i++) 
             HASIL[0][i] = M1[0][0]*M2[0][i] + M1[0][1]*M2[1][i];
-    else if (pthread_equal(id, tid[1])) // baris 2 matriks Hasil
+    else if (pthread_equal(id, tid[1]))
         for (int i = 0; i < COL; i++)
             HASIL[1][i] = M1[1][0]*M2[0][i] + M1[1][1]*M2[1][i];
-    else if (pthread_equal(id, tid[2])) // baris 3 matriks Hasil
+    else if (pthread_equal(id, tid[2]))
         for (int i = 0; i < COL; i++)
             HASIL[2][i] = M1[2][0]*M2[0][i] + M1[2][1]*M2[1][i];
-    else if (pthread_equal(id, tid[3])) // baris 4 matriks Hasil
+    else if (pthread_equal(id, tid[3]))
         for (int i = 0; i < COL; i++)
             HASIL[3][i] = M1[3][0]*M2[0][i] + M1[3][1]*M2[1][i];
 
@@ -44,6 +44,18 @@ void* hitungmatriks (void *arg) {
 
 int main () {
     int i,j;
+    printf("\nInput Matriks pertama (4X3) :\n");
+    for(i=0;i<4;i++){
+        for(j=0;j<3;j++){
+            scanf("%d",&M1[i][j]);
+        }
+    }
+    printf("\nInput Matriks kedua (3X6) :\n");
+    for(i=0;i<3;i++){
+        for(j=0;j<6;j++){
+            scanf("%d",&M2[i][j]);
+        }
+    }
     for (i = 0; i < ROW; i++) {
         int err = pthread_create(&(tid[i]), NULL, &hitungmatriks, NULL);
         if(err!=0){
@@ -55,7 +67,7 @@ int main () {
     pthread_join(tid[1], NULL);
     pthread_join(tid[2], NULL);
 
-    printf("MATRIKS HASIL\n");
+    printf("\nMATRIKS HASIL\n");
     int (*share_matriks)[4];
 
     key_t key = 1234;
@@ -77,3 +89,17 @@ int main () {
 
     return 0;
 }
+
+/*
+Test Case :
+Matriks 1 :
+2 4 1
+7 0 3
+1 4 8
+9 4 1
+
+Matriks 2:
+1 4 8 4 6 3
+9 4 1 1 4 1
+8 3 6 2 1 7
+*/
