@@ -280,12 +280,45 @@ bool readFileandSend(int socket, char filename[]) {
     return strcmp(message, "true") == 0;
 }
 
+void deleteFromTsv(char filename[]) {
+    FILE * tsv = fopen("files.tsv", "r");
+    FILE * tsv2 = fopen("files2.tsv", "w");
+    if(tsv == NULL) return;
+    if(tsv2 == NULL) return;
+    int lineCount = getLineCount(tsv);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, sizeof information);
+        fgets(information, MAX_INFORMATION_LENGTH, tsv);
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        char copy_of_information[strlen(information) + 1];
+        strcpy(copy_of_information, information);
+        char * publisher = strtok(information, "|");
+        char * tahun = strtok(NULL, "|");
+        char * filepath = strtok(NULL, "|");
+        char copy_of_filepath[strlen(filepath) + 1];
+        strcpy(copy_of_filepath, filepath);
+        char * filenameInTsv = basename(copy_of_filepath);
+        if(strcmp(filenameInTsv, filename) == 0) continue;
+        fprintf(tsv2, "%s\n", copy_of_information);
+    }
+    fclose(tsv); fclose(tsv2);
+    remove("files.tsv"); rename("files2.tsv", "files.tsv");
+}
+
 void deleteBook(int socket, char filename[]) {
+    if(!isBookExistInTsv(filename)) {
+        send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+        return;
+    }
     chdir("FILES");
     char newfilename[MAX_INFORMATION_LENGTH];
     sprintf(newfilename, "old-%s", filename);
     send(socket, (rename(filename, newfilename) != 0 ? successMsg : failMsg), FAIL_OR_SUCCESS_LENGTH, 0);
     chdir("../");
+    deleteFromTsv(filename);
+    send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
 }
 
 void app(int socket) {

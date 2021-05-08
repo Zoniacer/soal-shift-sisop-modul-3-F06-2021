@@ -106,7 +106,6 @@ bool readBinaryFile(FILE * file, int chunk[], int size) {
 bool readFileandSend(int socket, char filename[]) {
     int chunk[MAX_FILE_CHUNK];
     char message[FAIL_OR_SUCCESS_LENGTH];
-    printf("Nama buku %s\n", filename);
     FILE * file = fopen(filename, "r");
     if(file == NULL) {
         printf("Tidak bisa membaca file.\n");
@@ -176,8 +175,9 @@ void addBuku(int socket) {
     send(socket , bookInfo, MAX_INFORMATION_LENGTH , 0);
     if(readFileandSend(socket, filepath)) {
         printf("Buku ditambahkan.\n");
+        return;
     }
-    // printf("Buku gagal ditambahkan.\n");
+    printf("Buku gagal ditambahkan.\n");
 }
 
 bool authentication(int sock) {
@@ -233,7 +233,7 @@ void deleteBook(int sock) {
     char message[FAIL_OR_SUCCESS_LENGTH];
     memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
     read(sock, message, FAIL_OR_SUCCESS_LENGTH);
-    if(strcmp(message, failMsg)) printf("Gagal menghapus file.\n");
+    if(strcmp(message, failMsg) == 0) printf("Gagal menghapus file.\n");
     else printf("Sukses menghapus file.\n");
 }
 
