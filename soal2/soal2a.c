@@ -12,16 +12,8 @@
 
 pthread_t tid[4]; // Deklarasi jumlah thread
 
-
 //Deklarasi Matriks
-int M1[4][3],// = {{1, 2, 3},
-            //    {3, 4, 5},
-            //   {5, 6, 7},
-            //    {7, 8, 9}},
-    M2[3][6],// = {{1, 3, 5, 7, 9, 1},
-            //    {2, 4, 6, 8, 5, 4},
-            //    {1, 2, 3, 4, 3, 4}},
-    HASIL[4][6];
+int M1[4][3],M2[3][6],HASIL[4][6];
 
 void* hitungmatriks (void *arg) {
 
@@ -34,7 +26,6 @@ void* hitungmatriks (void *arg) {
             break;
         }       
     }
-
 }
 
 int main () {
@@ -58,9 +49,9 @@ int main () {
 		}
     }
 
-    pthread_join(tid[0], NULL);
-    pthread_join(tid[1], NULL);
-    pthread_join(tid[2], NULL);
+    for(i=0;i<ROW-1;i++){
+        pthread_join(tid[0], NULL);
+    }
 
     printf("\nMATRIKS HASIL\n");
     int *share_matriks;
