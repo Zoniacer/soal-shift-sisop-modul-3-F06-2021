@@ -63,6 +63,8 @@ bool login(int socket, char authenticatedUser[]) {
     char credentials[MAX_CREDENTIALS_LENGTH], file_credentials[MAX_CREDENTIALS_LENGTH];
     memset(credentials, 0, MAX_CREDENTIALS_LENGTH);
     int readStatus = read(socket, credentials, MAX_CREDENTIALS_LENGTH);
+    if(readStatus <= 0)
+        return false;
     FILE * fileAkun = fopen("akun.txt", "r");
     while(readStatus > 0 && fileAkun && fgets(file_credentials, MAX_CREDENTIALS_LENGTH, fileAkun) != NULL) {
         if(file_credentials[strlen(file_credentials) - 1] == '\n')
@@ -83,6 +85,8 @@ bool daftar(int socket) {
     char credentials[MAX_CREDENTIALS_LENGTH];
     memset(credentials, 0, MAX_CREDENTIALS_LENGTH);
     int readStatus = read(socket, credentials, MAX_CREDENTIALS_LENGTH);
+    if(readStatus <= 0)
+        return false;
     printf("Akun %s telah didaftarkan.\n", credentials);
     FILE * fileAkun = fopen("akun.txt", "a");
     if(fileAkun && readStatus > 0 && fprintf(fileAkun, "%s\n", credentials)) {
@@ -99,6 +103,8 @@ bool authentication(int socket, char authenticatedUser[]) {
     char action[10];
     memset(action, 0, sizeof(action));
     int readStatus = read(socket, action, sizeof(action));
+    if(readStatus <= 0)
+        return -1;
     if(strcmp(action, "register") == 0) {
         daftar(socket);
         return false;
@@ -132,9 +138,11 @@ FILE * readandSavefile(int socket, char filepath[]) {
     FILE * file = fopen(basename(copy_of_filepath), "w");
     do {
         memset(isEOF, 0, sizeof(isEOF));
-        read(socket, isEOF, sizeof(isEOF));
+        if(read(socket, isEOF, sizeof(isEOF)) <= 0)
+            return NULL;
         memset(chunk, 0, sizeof(chunk));
-        read(socket, chunk, sizeof(chunk));
+        if(read(socket, chunk, sizeof(chunk)) <= 0)
+            return NULL;
         writeToBinaryFile(file, chunk, sizeof(chunk) / sizeof(int));
     } while (strcmp(isEOF, "true") != 0);
     chdir("../");
@@ -155,6 +163,8 @@ bool addDataBuku(int socket, char *filepath) {
     char information[MAX_INFORMATION_LENGTH];
     memset(information, 0, MAX_INFORMATION_LENGTH);
     int readStatus = read(socket, information, MAX_INFORMATION_LENGTH);
+    if(readStatus <= 0)
+        return false;
     FILE * fileFile = fopen("files.tsv", "a");
     if(fileFile && readStatus > 0 && fprintf(fileFile, "%s\n", information)) {
         fclose(fileFile);
@@ -352,12 +362,20 @@ void deleteBook(int socket, char filename[], char authenticatedUser[]) {
 void * app(void * vargp) {
     int socket = *((int *)vargp);
     char authenticatedUser[MAX_CREDENTIALS_LENGTH];
-    while(!authentication(socket, authenticatedUser));
-    printf("User telah terautentikasi\n");
+    int authStatus = false;
+    while(!authStatus) {
+        authStatus = authentication(socket, authenticatedUser);
+        if(authStatus == -1) { // Connection closed
+            return NULL;
+        }
+    }
+    // printf("User telah terautentikasi\n");
     while(true) {
         char action[MAX_INFORMATION_LENGTH];
         memset(action, 0, MAX_INFORMATION_LENGTH);
         int readStatus = read(socket, action, MAX_INFORMATION_LENGTH);
+        if(readStatus <= 0)
+            return NULL;
         if(readStatus > 0 && strcmp("add", action) == 0) {
             addBuku(socket, authenticatedUser);
         } else if(readStatus > 0 && strcmp("see", action) == 0) {
@@ -365,19 +383,20 @@ void * app(void * vargp) {
         } else if(readStatus > 0 && strcmp("find", action) == 0) {
             char subfilename[MAX_INFORMATION_LENGTH];
             memset(subfilename, 0, sizeof(subfilename));
-            read(socket, subfilename, MAX_INFORMATION_LENGTH);
+            if(read(socket, subfilename, MAX_INFORMATION_LENGTH) <= 0)
+                return NULL;
             findSpecificName(socket, subfilename);
         } else if(readStatus > 0 && strcmp("download", action) == 0) {
             char filename[MAX_INFORMATION_LENGTH];
             memset(filename, 0, sizeof(filename));
-            read(socket, filename, MAX_INFORMATION_LENGTH);
+            if(read(socket, filename, MAX_INFORMATION_LENGTH) <= 0)
+                return NULL;
             readFileandSend(socket, filename);
-        } else if(readStatus > 0 && strcmp("exit", action) == 0)
-            return NULL;
-         else if(readStatus > 0 && strcmp("delete", action) == 0) {
+        } else if(readStatus > 0 && strcmp("delete", action) == 0) {
             char filename[MAX_INFORMATION_LENGTH];
             memset(filename, 0, sizeof(filename));
-            read(socket, filename, MAX_INFORMATION_LENGTH);
+            if(read(socket, filename, MAX_INFORMATION_LENGTH) <= 0)
+                return NULL;
             deleteBook(socket, filename, authenticatedUser);
         }
     }
@@ -409,6 +428,7 @@ int main() {
         // app(new_socket);
         pthread_create(&tid, NULL, app, (void *)&new_socket);
         pthread_join(tid, NULL);
+        close(new_socket);
         printf("Koneksi selesai.\n");
     }
     return 0;

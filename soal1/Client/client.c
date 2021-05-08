@@ -17,6 +17,7 @@
 #define LINE_COUNT_STR_LENGTH 20
 char failMsg[] = "false";
 char successMsg[] = "true";
+#define invalidCmd "\nMaaf, command yang anda masukkan tidak valid\n"
 
 bool setupClient(int * sock) {
     struct sockaddr_in address;
@@ -184,7 +185,7 @@ bool authentication(int sock) {
     const char loginPrompt[] = "Silahkan daftar atau login terlebih dahulu.";
     puts(loginPrompt);
     char action[10];
-    printf("(login / register) : ");
+    printf("(login / register / exit) : ");
     getlineRemoveNewline(action);
     if(strcmp(action, "register") == 0) {
         send(sock , action, strlen(action) , 0);
@@ -192,7 +193,10 @@ bool authentication(int sock) {
     } else if(strcmp(action, "login") == 0) {
         send(sock , action, strlen(action) , 0);
         return login(sock);
-    }
+    } else if(strcmp(action, "exit") == 0) {
+        close(sock);
+        exit(EXIT_SUCCESS);
+    } else puts(invalidCmd);
     return false;
 }
 
@@ -268,28 +272,28 @@ void printPrompt() {
 
 void executePrompt(int sock, char action[]) {
     if(strcmp("add", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            addBuku(sock);
-        } else if(strcmp("see", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            receiveFilesTsv(sock);
-        } else if(strcmp("download", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            char filename[MAX_INFORMATION_LENGTH];
-            getlineRemoveNewline(filename);
-            send(sock, filename, sizeof(filename), 0);
-            FILE * buku = readandSavefile(sock, filename);
-            if(buku) fclose(buku);
-        } else if(strcmp("exit", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            exit(EXIT_SUCCESS);
-        } else if(strcmp("delete", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            deleteBook(sock);
-        } else if(strcmp("find", action) == 0) {
-            send(sock, action, MAX_INFORMATION_LENGTH, 0);
-            findSpecificName(sock);
-        }
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        addBuku(sock);
+    } else if(strcmp("see", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        receiveFilesTsv(sock);
+    } else if(strcmp("download", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        char filename[MAX_INFORMATION_LENGTH];
+        getlineRemoveNewline(filename);
+        send(sock, filename, sizeof(filename), 0);
+        FILE * buku = readandSavefile(sock, filename);
+        if(buku) fclose(buku);
+    } else if(strcmp("exit", action) == 0) {
+        close(sock);
+        exit(EXIT_SUCCESS);
+    } else if(strcmp("delete", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        deleteBook(sock);
+    } else if(strcmp("find", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        findSpecificName(sock);
+    } else puts(invalidCmd);
 }
 
 int main(int argc, char const *argv[]) {
