@@ -89,15 +89,12 @@ bool login(int socket) {
 
 bool readBinaryFile(FILE * file, int chunk[], int size) {
     int i=0, charFromFile;
-    // FILE * dbg = fopen("anu.txt", "a");
     for(i=0; i<size; i++) {
-        // puts("masuk");
         charFromFile = fgetc(file);
         if(charFromFile == EOF) {
             chunk[i] = -1;
             break;
         }
-        // fprintf(dbg, "%d ", charFromFile);
         chunk[i] = charFromFile;
     }
     if(charFromFile == EOF) return false;
@@ -129,10 +126,8 @@ bool readFileandSend(int socket, char filename[]) {
 
 void writeToBinaryFile(FILE * file, int chunk[], int size) {
     int i=0;
-    // FILE * dbg = fopen("anu.txt", "a");
     for(; i<size; i++) {
         if(chunk[i] == -1) break;
-        // fprintf(dbg, "%d ", chunk[i]);
         fputc(chunk[i], file);
     }
 }
@@ -149,7 +144,6 @@ FILE * readandSavefile(int socket, char filename[]) {
     int chunk[MAX_FILE_CHUNK];
     FILE * file = fopen(filename, "w");
     do {
-    // printf("mantap\n");
         memset(isEOF, 0, sizeof(isEOF));
         read(socket, isEOF, sizeof(isEOF));
         memset(chunk, 0, sizeof(chunk));
@@ -220,13 +214,11 @@ void receiveFilesTsv(int socket) {
     char strLineCount[LINE_COUNT_STR_LENGTH];
     read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
     int lineCount = atoi(strLineCount);
-    // printf("%d\n", lineCount);
     while(lineCount--) {
         char information[MAX_INFORMATION_LENGTH];
         memset(information, 0, MAX_INFORMATION_LENGTH);
         read(socket, information, MAX_INFORMATION_LENGTH);
         printBookInfo(information);
-        // puts(information);
     }
 }
 
@@ -237,14 +229,12 @@ void findSpecificName(int socket) {
     char strLineCount[LINE_COUNT_STR_LENGTH];
     read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
     int lineCount = atoi(strLineCount);
-    // printf("%d\n", lineCount);
     while(lineCount--) {
         char information[MAX_INFORMATION_LENGTH];
         memset(information, 0, MAX_INFORMATION_LENGTH);
         read(socket, information, MAX_INFORMATION_LENGTH);
         if(strcmp(information, failMsg) == 0) break;
         printBookInfo(information);
-        // puts(information);
     }
 }
 
@@ -325,11 +315,5 @@ int main(int argc, char const *argv[]) {
         getchar();
         executePrompt(sock, action);
     }
-
-    // send(sock , hello , strlen(hello) , 0 );
-    // printf("Hello message sent\n");
-    // valread = read(sock , buffer, 1024);
-    // printf("%s\n", buffer);
-    // printf("%s\n",buffer );
     return 0;
 }

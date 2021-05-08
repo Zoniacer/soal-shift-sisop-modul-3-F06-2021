@@ -121,10 +121,8 @@ bool isFolderExists(char foldername[]) {
 
 void writeToBinaryFile(FILE * file, int chunk[], int size) {
     int i=0;
-    // FILE * dbg = fopen("anu.txt", "a");
     for(; i<size; i++) {
         if(chunk[i] == -1) break;
-        // fprintf(dbg, "%d ", chunk[i]);
         fputc(chunk[i], file);
     }
 }
@@ -251,15 +249,12 @@ void findSpecificName(int socket, char subStrName[]) {
 
 bool readBinaryFile(FILE * file, int chunk[], int size) {
     int i=0, charFromFile;
-    // FILE * dbg = fopen("anu.txt", "a");
     for(i=0; i<size; i++) {
-        // puts("masuk");
         charFromFile = fgetc(file);
         if(charFromFile == EOF) {
             chunk[i] = -1;
             break;
         }
-        // fprintf(dbg, "%d ", charFromFile);
         chunk[i] = charFromFile;
     }
     if(charFromFile == EOF) return false;
@@ -290,7 +285,6 @@ bool isBookExistInTsv(char filename[]) {
 bool readFileandSend(int socket, char filename[]) {
     int chunk[MAX_FILE_CHUNK];
     char message[FAIL_OR_SUCCESS_LENGTH];
-    // printf("Nama buku %s\n", filename);
     if(!isBookExistInTsv(filename)) {
         send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
         return false;
@@ -369,7 +363,6 @@ void * app(void * vargp) {
             return NULL;
         }
     }
-    // printf("User telah terautentikasi\n");
     while(true) {
         char action[MAX_INFORMATION_LENGTH];
         memset(action, 0, MAX_INFORMATION_LENGTH);
@@ -425,7 +418,6 @@ int main() {
         }
         printf("Koneksi baru diterima.\n");
         send(new_socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
-        // app(new_socket);
         pthread_create(&tid, NULL, app, (void *)&new_socket);
         pthread_join(tid, NULL);
         close(new_socket);
