@@ -1,6 +1,48 @@
 # soal-shift-sisop-modul-3-F06-2021
 
-## Soal Shift Modul 1
+## Soal Shift Modul 3
+
+### **Soal No. 2**
+Crypto (kamu) adalah teman Loba. Suatu pagi, Crypto melihat Loba yang sedang kewalahan mengerjakan tugas dari bosnya. Karena Crypto adalah orang yang sangat menyukai tantangan, dia ingin membantu Loba mengerjakan tugasnya. Detil dari tugas tersebut adalah:
+
+**a.** Membuat program perkalian matrix (4x3 dengan 3x6) dan menampilkan hasilnya. Matriks nantinya akan berisi angka 1-20 (tidak perlu dibuat filter angka).
+
+**b.** Membuat program dengan menggunakan matriks output dari program sebelumnya (program soal2a.c) (**Catatan!**: gunakan shared memory). Kemudian matriks tersebut akan dilakukan perhitungan dengan matrix baru (input user) sebagai berikut contoh perhitungan untuk matriks yang ada. Perhitungannya adalah setiap cel yang berasal dari matriks A menjadi angka untuk faktorial, lalu cel dari matriks B menjadi batas maksimal faktorialnya matri(dari paling besar ke paling kecil) (**Catatan!**: gunakan thread untuk perhitungan di setiap cel). 
+
+**Ketentuan:**
+```
+If a >= b  -> a!/(a-b)!
+If b > a -> a!
+If 0 -> 0
+```
+
+**Contoh :**
+
+| A | B | Angka-Angka Faktorial |
+|---|---| ----------------------|
+| 4 | 4 | 4 3 2 1 |
+| 4 | 5 | 4 3 2 1 |
+| 4 | 3 | 4 3 2 |
+| 4 | 0 | 0 |
+| 0 | 4 | 0 |
+| 4 | 6 | 4 3 2 1 |
+
+		
+**Contoh :**
+
+| Matriks A || Matriks B || Matriks Hasil ||
+| --------- |-| --------- |-| ------------- |-|
+ 0 | 4 | 0 |  4 | 0 | 4\*3\*2\*1 |
+| 4 | 5 | 6 | 2 | 4\*3\*2\*1 | 5\*4 |
+| 5 | 6 | 6 | 0 | 5\*4\*3\*2\*1 | 0 | 
+
+
+**c.** Karena takut lag dalam pengerjaannya membantu Loba, Crypto juga membuat program (soal2c.c) untuk mengecek 5 proses teratas apa saja yang memakan resource komputernya dengan command “ps aux | sort -nrk 3,3 | head -5” (Catatan!: Harus menggunakan IPC Pipes)
+
+**Note:**
+
+- Semua matriks berasal dari input ke program.
+- Dilarang menggunakan system()
 
 ### **Soal No. 3**
 
