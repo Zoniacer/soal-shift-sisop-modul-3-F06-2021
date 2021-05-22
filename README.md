@@ -44,6 +44,226 @@ If 0 -> 0
 - Semua matriks berasal dari input ke program.
 - Dilarang menggunakan system()
 
+### **Jawaban Soal 2a**
+
+Pada soal 2a kita diminta untuk membuat sebuah program yang digunakan untuk melakukan perkalian matriks 4x3 dan 3x6 yang dimasukkan ke program oleh user. Untuk kode yang berfungsi untuk menghitung perkalian matriks adalah sebagai berikut:
+```C
+//Fungsi hitung perkalian matriks
+void* hitungmatriks (void *arg) {
+    pthread_t id = pthread_self();
+
+    for(int i = 0; i<ROW; i++){
+        if (pthread_equal(id, tid[i])){
+            for (int j = 0; j < COL; j++) 
+                HASIL[i][j] = M1[i][0]*M2[0][j] + M1[i][1]*M2[1][j] + M1[i][2]*M2[2][j];
+            break;
+        }       
+    }
+}
+. 
+. 
+. 
+. 
+//Untuk membuat thread dan memanggil fungsi hitung matriks
+for (i = 0; i < ROW; i++) {
+     int err = pthread_create(&(tid[i]), NULL, &hitungmatriks, NULL);
+     if(err!=0){
+	printf("\n can't create thread : [%s]",strerror(err));
+     }
+}
+```
+
+Kemudian setelah melakukan operasi pada matriks dan menghasilkan yang merupakan hasil perkalian, hasil tersebut akan diberikan ke soal2b melalui *shared memory*, berikut kodenya: 
+
+```C
+printf("\nMATRIKS HASIL\n");
+int *share_matriks;
+
+key_t key = 1234;
+int shmid = shmget(key, sizeof(int[ROW][COL]), IPC_CREAT | 0666);
+share_matriks = (int*)shmat(shmid, NULL, 0);
+
+//Memasukkan matriks ke shared memory
+for (i = 0; i < ROW; i++){
+    for (j = 0; j < COL; j++){
+        share_matriks[i*COL+j] = HASIL[i][j];
+        printf("%d\t",share_matriks[i*COL+j]);
+    }
+    printf("\n");   
+}
+
+sleep(10);
+
+shmdt(share_matriks);
+shmctl(shmid, IPC_RMID, NULL);
+```
+
+Berikut ini sedikit penjelasan mengenai kode di atas.
+
+- `shmid` disini mengembalikan nilai dari pemanggilan sistem `shmget(key, sizeof(int[ROW][COL]), IPC_CREAT | 0666)` yang digunakan untuk membuat suatu segmen dalam memori.
+- `share_matriks = (int *)shmat(shmid, NULL, 0)` mendaftarkan atau mengattach segmen ke data space dari proses.
+- `shmdt(share_matriks)` untuk mendetach segmen dari data space dari proses.
+- `shmctl(shmid, IPC_RMID, NULL)` untuk mengetahui atau mengubah informasi yang berkaitan dengan suatu shared memory.
+
+Berikut ini merupakan **source code** lengkap dari soal 2a:
+```C
+#include<stdio.h>
+#include<string.h>
+#include<pthread.h>
+#include<stdlib.h>
+#include<unistd.h>
+#include<sys/types.h>
+#include<sys/wait.h>
+#include<sys/shm.h>
+#include<sys/ipc.h>
+#define ROW 4
+#define COL 6
+
+pthread_t tid[4]; // Deklarasi jumlah thread
+
+//Deklarasi Matriks
+int M1[4][3],M2[3][6],HASIL[4][6];
+
+void* hitungmatriks (void *arg) {
+
+    pthread_t id = pthread_self();
+
+    for(int i = 0; i<ROW; i++){
+        if (pthread_equal(id, tid[i])){
+            for (int j = 0; j < COL; j++) 
+                HASIL[i][j] = M1[i][0]*M2[0][j] + M1[i][1]*M2[1][j] + M1[i][2]*M2[2][j];
+            break;
+        }       
+    }
+}
+
+int main () {
+    int i,j;
+    printf("\nInput Matriks pertama (4X3) :\n");
+    for(i=0;i<4;i++){
+        for(j=0;j<3;j++){
+            scanf("%d",&M1[i][j]);
+        }
+    }
+    printf("\nInput Matriks kedua (3X6) :\n");
+    for(i=0;i<3;i++){
+        for(j=0;j<6;j++){
+            scanf("%d",&M2[i][j]);
+        }
+    }
+    for (i = 0; i < ROW; i++) {
+        int err = pthread_create(&(tid[i]), NULL, &hitungmatriks, NULL);
+        if(err!=0){
+			printf("\n can't create thread : [%s]",strerror(err));
+		}
+    }
+
+    for(i=0;i<ROW-1;i++){
+        pthread_join(tid[0], NULL);
+    }
+
+    printf("\nMATRIKS HASIL\n");
+    int *share_matriks;
+
+    key_t key = 1234;
+    int shmid = shmget(key, sizeof(int[ROW][COL]), IPC_CREAT | 0666);
+    share_matriks = (int*)shmat(shmid, NULL, 0);
+
+    for (i = 0; i < ROW; i++){
+        for (j = 0; j < COL; j++){
+            share_matriks[i*COL+j] = HASIL[i][j];
+            printf("%d\t",share_matriks[i*COL+j]);
+        }
+        printf("\n");   
+    }
+
+    sleep(10);
+
+    shmdt(share_matriks);
+    shmctl(shmid, IPC_RMID, NULL);
+
+    return 0;
+}
+
+```
+
+### **Jawaban Soal 2b**
+
+Untuk soal2b kita diminta untuk mengambil matriks hasil operasi dari soal2a sebelumnya dari shared memory dan menampilkannya. 
+
+```C
+int *share_matriks,i,j;
+
+key_t key = 1234;
+int shmid = shmget(key, sizeof(int[ROW][COL]), IPC_CREAT | 0666);
+share_matriks = (int*)shmat(shmid, NULL, 0);
+
+printf("MATRIKS PASSING\n");
+for(i=0;i<ROW;i++){
+    for(j=0;j<COL;j++){
+       mx_pass[i][j] = share_matriks[i*COL+j];
+       printf("%llu\t",mx_pass[i][j]);
+    }
+    printf("\n");
+}
+```
+
+Lalu user akan memasukkan matriks yang akan menjadi batas matriks batas, kemudian dengan matriks tersebut akan dilakukan operasi faktorial dengan ketentuan berikut:
+
+- If a >= b  -> a!/(a-b)!
+- If b > a -> a!
+- If 0 -> 0
+
+Pada soal ini diminta untuk membuat thread untuk menghitung setiap cell pada matriks nya, berikut untuk kodenya:
+```C
+ull fact(ull n){
+
+    if(n==1 || n==0) return 1;
+    
+    ull temp = n;
+    for(int i=n-1;i>=1;i--){
+        temp*=i;
+    }
+    return temp;
+}
+
+ull mtx_fact(ull n,ull batas){
+    if(n == 0 || batas == 0) return 0;
+    if(n<batas) return fact(n);
+    if(n>=batas) return fact(n)/fact(n-batas);
+}
+
+void* mtx_thread (void *arg) {
+    int status;
+    pthread_t id = pthread_self();
+    for(int i = 0; i<ROW; i++){
+        status=0;
+        for (int j = 0; j < COL; j++){
+            if (pthread_equal(id, tid[i*COL+j])){
+                HASIL[i][j] = mtx_fact(mx_pass[i][j],mx_batas[i][j]);
+                status=1;
+                break;
+            }   
+        }
+        if(status==1)break;
+    }
+}
+. 
+. 
+. 
+. 
+
+//Untuk membuat thread dan menanggil fungsi mtx_thread
+for (i = 0; i < ROW; i++) {
+    for(j = 0; j < COL; j++){
+        int err = pthread_create(&(tid[i*COL+j]), NULL, &mtx_thread, NULL);
+        if(err!=0){
+            printf("\n can't create thread : [%s]",strerror(err));
+        }
+    }
+}
+```
+
 ### **Soal No. 3**
 
 Seorang mahasiswa bernama Alex sedang mengalami masa gabut. Di saat masa gabutnya, ia memikirkan untuk merapikan sejumlah file yang ada di laptopnya. Karena jumlah filenya terlalu banyak, Alex meminta saran ke Ayub. Ayub menyarankan untuk membuat sebuah program C agar file-file dapat dikategorikan. Program ini akan memindahkan file sesuai ekstensinya ke dalam folder sesuai ekstensinya yang folder hasilnya terdapat di working directory ketika program kategori tersebut dijalankan.
