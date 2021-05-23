@@ -1058,52 +1058,363 @@ if(!isFolderExists("FILES")) mkdir("FILES", S_IRWXU);
 
 #### 1c pada server.c
 
-```c
+Pertama, apabila request dari client berupa command `add`, maka akan dilakukan pemanggilan fungsi `addBuku()`.
 
+```c
+if(readStatus > 0 && strcmp("add", action) == 0) {
+    addBuku(socket, authenticatedUser);
+}
+```
+
+Berikutnya, pada fungsi `addBuku()` dilakukan pemanggilan fungsi `addDataBuku()` yang akan dijelaskan di bawah. Kemudian diambil path dengan `strtok()` karena client mengirim dengan format `Publisher|Tahun|Path`. Setelah itu dilakukan penerimaan file dengan fungsi `readandSavefile()` yang juga akan dijelaskan di bawah. Setelah itu client akan dikonfirmasi terkait status sukses atau gagalnya penyimpanan file. Yang terakhir, dipanggil fungsi `logging()` dengan event `Tambah` yang akan dijelaskan pada [Jawaban Soal 1h](Jawaban-Soal-1h)
+
+Fungsi `addDataBuku()` akan menyimpan data buku ke dalam `files.tsv`
+
+```c
+bool addDataBuku(int socket, char *filepath) {
+    char information[MAX_INFORMATION_LENGTH];
+    memset(information, 0, MAX_INFORMATION_LENGTH);
+    int readStatus = read(socket, information, MAX_INFORMATION_LENGTH);
+    if(readStatus <= 0)
+        return false;
+    FILE * fileFile = fopen("files.tsv", "a");
+    if(fileFile && readStatus > 0 && fprintf(fileFile, "%s\n", information)) {
+        fclose(fileFile);
+        printf("Buku %s telah didaftarkan.\n", information);
+        strcpy(filepath, information);
+        return true;
+    }
+    fclose(fileFile);
+    return false;
+}
+```
+
+Fungsi `readandSavefile()` akan menerima file berupa chunk 4 KB beberapa kali sesuai request client, lalu menyimpannya menggunakan fungsi `writeToBinaryFile()` yang akan dijelaskan di bawah.
+
+```c
+FILE * readandSavefile(int socket, char filepath[]) {
+    chdir("FILES");
+    char isEOF[10];
+    int chunk[MAX_FILE_CHUNK];
+    char copy_of_filepath[strlen(filepath) + 1];
+    strcpy(copy_of_filepath, filepath);
+    FILE * file = fopen(basename(copy_of_filepath), "w");
+    do {
+        memset(isEOF, 0, sizeof(isEOF));
+        if(read(socket, isEOF, sizeof(isEOF)) <= 0)
+            return NULL;
+        memset(chunk, 0, sizeof(chunk));
+        if(read(socket, chunk, sizeof(chunk)) <= 0)
+            return NULL;
+        writeToBinaryFile(file, chunk, sizeof(chunk) / sizeof(int));
+    } while (strcmp(isEOF, "true") != 0);
+    chdir("../");
+    return file;
+}
+```
+
+Fungsi `writeToBinaryFile()` akan menyimpan setiap isi dari array chunk berupa integer ke dalam file menggunakan `fputc()`. Alasan penggunaan integer dibandingkan char adalah agar special character yang tidak masuk dalam ASCII dapat dikirimkan (agar file selain .txt bisa dikirim)
+
+```c
+void writeToBinaryFile(FILE * file, int chunk[], int size) {
+    int i=0;
+    for(; i<size; i++) {
+        if(chunk[i] == -1) break;
+        fputc(chunk[i], file);
+    }
+}
 ```
 
 #### 1c pada client.c
 
+Berikut adalah pemanggilan fungsi `addBuku()` apabila user memberi input `add`
+
 ```c
+if(strcmp("add", action) == 0) {
+    send(sock, action, MAX_INFORMATION_LENGTH, 0);
+    addBuku(sock);
+}
+```
+
+`addBuku()` akan menghandle input dari user, memformat dengan separator `|` dan mengirimnya ke server dengan fungsi `readFileandSend()` yang akan dijelaskan di bawah.
+
+```c
+void addBuku(int socket) {
+    char publisher[MAX_INFORMATION_LENGTH / 3], filepath[MAX_INFORMATION_LENGTH / 3];
+    char bookInfo[MAX_INFORMATION_LENGTH];
+    int tahun;
+    printf("Publisher: ");
+    getlineRemoveNewline(publisher);
+    printf("Tahun Publikasi: ");
+    scanf("%d", &tahun);
+    getchar();
+    printf("Filepath: ");
+    getlineRemoveNewline(filepath);
+    sprintf(bookInfo, "%s|%d|%s", publisher, tahun, filepath);
+    send(socket , bookInfo, MAX_INFORMATION_LENGTH , 0);
+    if(readFileandSend(socket, filepath)) {
+        printf("Buku ditambahkan.\n");
+        return;
+    }
+    printf("Buku gagal ditambahkan.\n");
+}
+```
+
+Fungsi `readFileandSend()` akan membaca file dengan fungsi `readBinaryFile()` mengirimkan file chunk dari file dan menyelesaikannya apabila mencapai `EOF`.
+
+```c
+bool readFileandSend(int socket, char filename[]) {
+    int chunk[MAX_FILE_CHUNK];
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    FILE * file = fopen(filename, "r");
+    if(file == NULL) {
+        printf("Tidak bisa membaca file.\n");
+        return false;
+    }
+    while (true) {
+        char isEOF[10];
+        memset(isEOF, 0, sizeof(isEOF));
+        memset(chunk, 0, sizeof(chunk));
+        strcpy(isEOF, (readBinaryFile(file, chunk, sizeof(chunk) / sizeof(int)) ? "false" : "true"));
+        send(socket, isEOF, sizeof(isEOF), 0);
+        send(socket, chunk, sizeof(chunk), 0);
+        if(strcmp(isEOF, "true") == 0)
+            break;
+    };
+    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(socket, message, FAIL_OR_SUCCESS_LENGTH);
+    return strcmp(message, "true") == 0;
+}
+```
+
+Fungsi `readBinaryFile()` akan membaca file menggunakan `fgetc()` hingga batas file chunk atau jika mencapai `EOF`.
+
+```c
+bool readBinaryFile(FILE * file, int chunk[], int size) {
+    int i=0, charFromFile;
+    for(i=0; i<size; i++) {
+        charFromFile = fgetc(file);
+        if(charFromFile == EOF) {
+            chunk[i] = -1;
+            break;
+        }
+        chunk[i] = charFromFile;
+    }
+    if(charFromFile == EOF) return false;
+    else return true;
+}
 ```
 
 ### **Jawaban Soal 1d**
 
 #### 1d pada server.c
 
-```c
+Fungsi `readFileandSend()` akan dipanggil dari server apabila user menginput download, fungsi ini cara kerjanya mirip dengan yang ada pada client seperti yang sudah dijelaskan di atas.
 
+```c
+if(readStatus > 0 && strcmp("download", action) == 0) {
+    char filename[MAX_INFORMATION_LENGTH];
+    memset(filename, 0, sizeof(filename));
+    if(read(socket, filename, MAX_INFORMATION_LENGTH) <= 0)
+        return NULL;
+    readFileandSend(socket, filename);
+}
 ```
 
 #### 1d pada client.c
 
+Fungsi `readandSavefile()` akan dipanggil dari client apabila user menginput download, fungsi ini cara kerjanya mirip dengan yang ada pada server seperti yang sudah dijelaskan di atas.
+
 ```c
+if(strcmp("download", action) == 0) {
+    send(sock, action, MAX_INFORMATION_LENGTH, 0);
+    char filename[MAX_INFORMATION_LENGTH];
+    getlineRemoveNewline(filename);
+    send(sock, filename, sizeof(filename), 0);
+    FILE * buku = readandSavefile(sock, filename);
+    if(buku) fclose(buku);
+}
 ```
 
 ### **Jawaban Soal 1e**
 
 #### 1e pada server.c
 
-```c
+Fungsi `deleteBook()` akan dipanggil apabila client memintanya.
 
+```c
+if(readStatus > 0 && strcmp("delete", action) == 0) {
+    char filename[MAX_INFORMATION_LENGTH];
+    memset(filename, 0, sizeof(filename));
+    if(read(socket, filename, MAX_INFORMATION_LENGTH) <= 0)
+        return NULL;
+    deleteBook(socket, filename, authenticatedUser);
+}
+```
+
+Fungsi tersebut akan memanggil `isBookExistInTsv()`, jika ada tidak ada maka akan mengirim pesan error ke client. Jika tidak, maka dilakukan rename sesuai soal dan menghapus rownya dari `files.tsv`
+
+```c
+void deleteBook(int socket, char filename[], char authenticatedUser[]) {
+    if(!isBookExistInTsv(filename)) {
+        send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+        return;
+    }
+    chdir("FILES");
+    char newfilename[MAX_INFORMATION_LENGTH];
+    sprintf(newfilename, "old-%s", filename);
+    send(socket, (rename(filename, newfilename) != 0 ? successMsg : failMsg), FAIL_OR_SUCCESS_LENGTH, 0);
+    chdir("../");
+    deleteFromTsv(filename);
+    logging("Hapus", filename, authenticatedUser);
+    send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+}
+```
+
+Fungsi `isBookExistInTsv()` akan scan record pada `files.tsv` satu persatu dan return `true` apabila ditemukan.
+
+```c
+bool isBookExistInTsv(char filename[]) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, sizeof information);
+        if(fgets(information, sizeof information, file) == NULL)
+            continue;
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        char * publisher = strtok(information, "|");
+        char * tahun = strtok(NULL, "|");
+        char * filepath = strtok(NULL, "|");
+        char copy_of_filepath[strlen(filepath) + 1];
+        strcpy(copy_of_filepath, filepath);
+        char * filenameInTsv = basename(copy_of_filepath);
+        if(strcmp(filenameInTsv, filename) == 0) return true;
+    }
+    return false;
+}
 ```
 
 #### 1e pada client.c
 
+Fungsi `deleteBook()` akan dipanggil ketika user memintanya.
+
 ```c
+if(strcmp("delete", action) == 0) {
+    send(sock, action, MAX_INFORMATION_LENGTH, 0);
+    deleteBook(sock);
+}
+```
+
+Fungsi tersebut akan mengirimkan detil nama file dan mengirimkannya ke server. Setelah itu mengolah status respon dari server (gagal / berhasil).
+
+```c
+void deleteBook(int sock) {
+    char filename[MAX_INFORMATION_LENGTH];
+    getlineRemoveNewline(filename);
+    send(sock, filename, sizeof(filename), 0);
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(sock, message, FAIL_OR_SUCCESS_LENGTH);
+    if(strcmp(message, failMsg) == 0) printf("Gagal menghapus file.\n");
+    else printf("Sukses menghapus file.\n");
+}
 ```
 
 ### **Jawaban Soal 1f**
 
 #### 1f pada server.c
 
-```c
+Fungsi `seeFilesTsv()` akan dipanggil apabila client memintanya.
 
+```c
+if(readStatus > 0 && strcmp("see", action) == 0) {
+    seeFilesTsv(socket);
+}
+```
+
+Fungsi `seeFilesTsv()` akan menghitung memanggil `getLineCount()` untuk mengetahui terdapat berapa baris pada `files.tsv`, setelah itu akan mengirimkan respon ke client berupa jumlah row dan detil setiap row.
+
+```c
+void seeFilesTsv(int socket) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    char information[MAX_INFORMATION_LENGTH];
+    sprintf(strLineCount, "%d", lineCount);
+    send(socket, strLineCount, LINE_COUNT_STR_LENGTH, 0);
+    while(file && lineCount--) {
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        fgets(information, MAX_INFORMATION_LENGTH, file);
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        send(socket, information, MAX_INFORMATION_LENGTH, 0);
+    }
+    fclose(file);
+}
+```
+
+`getLineCount()` hanya perlu melakukan `getc()` dan menghitung jumlah line berdasarkan jumlah `\n` yang ada.
+
+```c
+int getLineCount(FILE * file) {
+    int cnt = 0;
+    char c;
+    if(file) {
+        while((c = getc(file)) != EOF) if(c == '\n') cnt++;
+        rewind(file);
+        return cnt;
+    }
+    return 0;
+}
 ```
 
 #### 1f pada client.c
 
+Fungsi `receiveFilesTsv()` dipanggil.
+
 ```c
+if(strcmp("see", action) == 0) {
+    send(sock, action, MAX_INFORMATION_LENGTH, 0);
+    receiveFilesTsv(sock);
+}
+```
+
+Fungsi `receiveFilesTsv()` akan menerima respon dari server berupa jumlah buku dan detilnya. Untuk setiap buku akan dipanggil fungsi `printBookInfo()` yang akan dijelaskan di bawah.
+
+```c
+void receiveFilesTsv(int socket) {
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
+    int lineCount = atoi(strLineCount);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        read(socket, information, MAX_INFORMATION_LENGTH);
+        printBookInfo(information);
+    }
+}
+```
+
+Fungsi `printBookInfo()` akan mengekstrak publisher, tahun, dan filepath menggunakan `strtok()` lalu dari filepath akan diambil nama filenya menggunakan `basename()` dan lebih spesifik lagi akan disaring extension dan nama filenya saja. Setelah itu diprint sesuai permintaan soal.
+
+```c
+void printBookInfo(char information[]) {
+    char * publisher = strtok(information, "|");
+    char * tahun = strtok(NULL, "|");
+    char * filepath = strtok(NULL, "|");
+    char copy_of_filepath[strlen(filepath) + 1];
+    strcpy(copy_of_filepath, filepath);
+    char * namaplusext = basename(copy_of_filepath);
+    char * nama = strtok(namaplusext, ".");
+    char * ext = strtok(NULL, ".");
+    printf("Nama: %s\n", nama);
+    printf("Publisher: %s\n", publisher);
+    printf("Tahun publishing: %s\n", tahun);
+    printf("Ekstensi File: %s\n", ext);
+    printf("Filepath: %s\n\n", filepath);
+}
 ```
 
 ### **Jawaban Soal 1g**
