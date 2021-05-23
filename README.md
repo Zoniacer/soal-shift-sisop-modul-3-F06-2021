@@ -1046,13 +1046,12 @@ bool daftar(int socket) {
 
 #### 1b pada server.c
 
-```c
-
-```
-
-#### 1b pada client.c
+Folder akan langsung dibuat ketika server dijalankan. Berikut potongan kodenya pada fungsi `main()`
 
 ```c
+if(!isFileExists("akun.txt")) createFile("akun.txt");
+if(!isFileExists("files.tsv")) createFile("files.tsv");
+if(!isFolderExists("FILES")) mkdir("FILES", S_IRWXU);
 ```
 
 ### **Jawaban Soal 1c**
