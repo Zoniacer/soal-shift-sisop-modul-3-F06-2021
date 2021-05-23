@@ -3,14 +3,16 @@
 ## Soal Shift Modul 3
 
 ### **Soal No. 2**
+
 Crypto (kamu) adalah teman Loba. Suatu pagi, Crypto melihat Loba yang sedang kewalahan mengerjakan tugas dari bosnya. Karena Crypto adalah orang yang sangat menyukai tantangan, dia ingin membantu Loba mengerjakan tugasnya. Detil dari tugas tersebut adalah:
 
 **a.** Membuat program perkalian matrix (4x3 dengan 3x6) dan menampilkan hasilnya. Matriks nantinya akan berisi angka 1-20 (tidak perlu dibuat filter angka).
 
-**b.** Membuat program dengan menggunakan matriks output dari program sebelumnya (program soal2a.c) (**Catatan!**: gunakan shared memory). Kemudian matriks tersebut akan dilakukan perhitungan dengan matrix baru (input user) sebagai berikut contoh perhitungan untuk matriks yang ada. Perhitungannya adalah setiap cel yang berasal dari matriks A menjadi angka untuk faktorial, lalu cel dari matriks B menjadi batas maksimal faktorialnya matri(dari paling besar ke paling kecil) (**Catatan!**: gunakan thread untuk perhitungan di setiap cel). 
+**b.** Membuat program dengan menggunakan matriks output dari program sebelumnya (program soal2a.c) (**Catatan!**: gunakan shared memory). Kemudian matriks tersebut akan dilakukan perhitungan dengan matrix baru (input user) sebagai berikut contoh perhitungan untuk matriks yang ada. Perhitungannya adalah setiap cel yang berasal dari matriks A menjadi angka untuk faktorial, lalu cel dari matriks B menjadi batas maksimal faktorialnya matri(dari paling besar ke paling kecil) (**Catatan!**: gunakan thread untuk perhitungan di setiap cel).
 
 **Ketentuan:**
-```
+
+```a
 If a >= b  -> a!/(a-b)!
 If b > a -> a!
 If 0 -> 0
@@ -18,24 +20,22 @@ If 0 -> 0
 
 **Contoh :**
 
-| A | B | Angka-Angka Faktorial |
-|---|---| ----------------------|
-| 4 | 4 | 4 3 2 1 |
-| 4 | 5 | 4 3 2 1 |
-| 4 | 3 | 4 3 2 |
-| 4 | 0 | 0 |
-| 0 | 4 | 0 |
-| 4 | 6 | 4 3 2 1 |
+| A   | B   | Angka-Angka Faktorial |
+| --- | --- | --------------------- |
+| 4   | 4   | 4 3 2 1               |
+| 4   | 5   | 4 3 2 1               |
+| 4   | 3   | 4 3 2                 |
+| 4   | 0   | 0                     |
+| 0   | 4   | 0                     |
+| 4   | 6   | 4 3 2 1               |
 
-		
 **Contoh :**
 
-| Matriks A || Matriks B || Matriks Hasil ||
-| --------- |-| --------- |-| ------------- |-|
- 0 | 4 | 0 |  4 | 0 | 4\*3\*2\*1 |
-| 4 | 5 | 6 | 2 | 4\*3\*2\*1 | 5\*4 |
-| 5 | 6 | 6 | 0 | 5\*4\*3\*2\*1 | 0 | 
-
+| Matriks A |     | Matriks B |     | Matriks Hasil |            |
+| --------- | --- | --------- | --- | ------------- | ---------- |
+| 0         | 4   | 0         | 4   | 0             | 4\*3\*2\*1 |
+| 4         | 5   | 6         | 2   | 4\*3\*2\*1    | 5\*4       |
+| 5         | 6   | 6         | 0   | 5\*4\*3\*2\*1 | 0          |
 
 **c.** Karena takut lag dalam pengerjaannya membantu Loba, Crypto juga membuat program (soal2c.c) untuk mengecek 5 proses teratas apa saja yang memakan resource komputernya dengan command “ps aux | sort -nrk 3,3 | head -5” (Catatan!: Harus menggunakan IPC Pipes)
 
@@ -47,6 +47,7 @@ If 0 -> 0
 ### **Jawaban Soal 2a**
 
 Pada soal 2a kita diminta untuk membuat sebuah program yang digunakan untuk melakukan perkalian matriks 4x3 dan 3x6 yang dimasukkan ke program oleh user. Untuk kode yang berfungsi untuk menghitung perkalian matriks adalah sebagai berikut:
+
 ```C
 //Fungsi hitung perkalian matriks
 void* hitungmatriks (void *arg) {
@@ -68,12 +69,12 @@ void* hitungmatriks (void *arg) {
 for (i = 0; i < ROW; i++) {
      int err = pthread_create(&(tid[i]), NULL, &hitungmatriks, NULL);
      if(err!=0){
-	printf("\n can't create thread : [%s]",strerror(err));
+        printf("\n can't create thread : [%s]",strerror(err));
      }
 }
 ```
 
-Kemudian setelah melakukan operasi pada matriks dan menghasilkan yang merupakan hasil perkalian, hasil tersebut akan diberikan ke soal2b melalui *shared memory*, berikut kodenya: 
+Kemudian setelah melakukan operasi pada matriks dan menghasilkan yang merupakan hasil perkalian, hasil tersebut akan diberikan ke soal2b melalui *shared memory*, berikut kodenya:
 
 ```C
 printf("\nMATRIKS HASIL\n");
@@ -106,6 +107,7 @@ Berikut ini sedikit penjelasan mengenai kode di atas.
 - `shmctl(shmid, IPC_RMID, NULL)` untuk mengetahui atau mengubah informasi yang berkaitan dengan suatu shared memory.
 
 Berikut ini merupakan **source code** lengkap dari soal 2a:
+
 ```C
 #include<stdio.h>
 #include<string.h>
@@ -154,8 +156,8 @@ int main () {
     for (i = 0; i < ROW; i++) {
         int err = pthread_create(&(tid[i]), NULL, &hitungmatriks, NULL);
         if(err!=0){
-			printf("\n can't create thread : [%s]",strerror(err));
-		}
+            printf("\n can't create thread : [%s]",strerror(err));
+        }
     }
 
     for(i=0;i<ROW-1;i++){
@@ -189,7 +191,7 @@ int main () {
 
 ### **Jawaban Soal 2b**
 
-Untuk soal2b kita diminta untuk mengambil matriks hasil operasi dari soal2a sebelumnya dari shared memory dan menampilkannya. 
+Untuk soal2b kita diminta untuk mengambil matriks hasil operasi dari soal2a sebelumnya dari shared memory dan menampilkannya.
 
 ```C
 int *share_matriks,i,j;
@@ -215,6 +217,7 @@ Lalu user akan memasukkan matriks yang akan menjadi batas matriks batas, kemudia
 - If 0 -> 0
 
 Pada soal ini diminta untuk membuat thread untuk menghitung setiap cell pada matriks nya, berikut untuk kodenya:
+
 ```C
 ull fact(ull n){
 
@@ -262,8 +265,11 @@ for (i = 0; i < ROW; i++) {
         }
     }
 }
+
 ```
+
 Kemudian berikut adalah **Source Code** lengkap dari soal2b:
+
 ```C
 #include<stdio.h>
 #include<string.h>
@@ -364,6 +370,7 @@ Lalu berikut untuk tampilan saat kode dari soal2a dan soal2b dijalankan:
 ### **Jawaban Soal 2c**
 
 Pada soal2c kita diminta untuk membuat program yang akan menampilkan 5 program teratas yang memakan resource komputer sekarang, disini diminta untuk menggunakan pipe. Caranya adalah dengan membuat 2 buah pipe yang menghubungkan 3 command, berikut kode nya:
+
 ```C
  // create pipe1
     if (pipe(pipe1) == -1){
@@ -406,9 +413,10 @@ Pada soal2c kita diminta untuk membuat program yang akan menampilkan 5 program t
     else if (pid == 0){
         comm3();
     }else{
-	execlp("^C","^C",NULL);
+        execlp("^C","^C",NULL);
     }
 ```
+
 Pertama adalah membuat pipe pertama kemudian menjalankan fork untuk mengeksekusi perintah `ps aux`. Kedua yaitu membuat pipe kedua dan menjalankan fork untuk mengeksekusi perintah `sort -nrk 3,3`. Lalu terakhir yaitu menjalankan fork untuk mengeksekusi perintah `head -5`.
 
 berikut merupakan tampilan saat menjalankan program soal2c:
@@ -416,6 +424,7 @@ berikut merupakan tampilan saat menjalankan program soal2c:
 ![image](https://user-images.githubusercontent.com/40484843/119246524-82e8dc80-bbac-11eb-9a00-a54d9a712486.png)
 
 ### **Kendala pengerjaan No.2:**
+
 1. Kendala untuk soal no 2a adalah kesulitan untuk menyimpan matriks pada shared memory karena berbentuk matriks 2 dimensi
 2. Kendala untuk soal no 2b adalah kesulitan untuk membuat thread untuk tiap cell pada matriks, karena itu membutuhkan banyak thread.
 3. Kendala untuk soal no 2c adalah saat program dijalankan, program tersebut tidak langsung menutup dan harus di terminate secara manual. Untuk masalah ini sudah terselesaikan dengan melakukan terminate dalam program(revisi)
@@ -425,6 +434,7 @@ berikut merupakan tampilan saat menjalankan program soal2c:
 Seorang mahasiswa bernama Alex sedang mengalami masa gabut. Di saat masa gabutnya, ia memikirkan untuk merapikan sejumlah file yang ada di laptopnya. Karena jumlah filenya terlalu banyak, Alex meminta saran ke Ayub. Ayub menyarankan untuk membuat sebuah program C agar file-file dapat dikategorikan. Program ini akan memindahkan file sesuai ekstensinya ke dalam folder sesuai ekstensinya yang folder hasilnya terdapat di working directory ketika program kategori tersebut dijalankan.
 
 Contoh apabila program dijalankan:
+
 ```text
 # Program soal3 terletak di /home/izone/soal3
 $ ./soal3 -f path/to/file1.jpg path/to/file2.c path/to/file3.zip
@@ -438,31 +448,39 @@ $ ./soal3 -f path/to/file1.jpg path/to/file2.c path/to/file3.zip
     |--file3.zip
 ```
 
-**(a)** Program menerima opsi -f seperti contoh di atas, jadi pengguna bisa menambahkan argumen file yang bisa dikategorikan sebanyak yang diinginkan oleh pengguna. 
+**(a)** Program menerima opsi -f seperti contoh di atas, jadi pengguna bisa menambahkan argumen file yang bisa dikategorikan sebanyak yang diinginkan oleh pengguna.
 
 Output yang dikeluarkan adalah seperti ini :
+
 ```text
 File 1 : Berhasil Dikategorikan (jika berhasil)
 File 2 : Sad, gagal :( (jika gagal)
 File 3 : Berhasil Dikategorikan
 ```
-**(b)** Program juga dapat menerima opsi -d untuk melakukan pengkategorian pada suatu directory. Namun pada opsi -d ini, user hanya bisa memasukkan input 1 directory saja, tidak seperti file yang bebas menginput file sebanyak mungkin. 
+
+**(b)** Program juga dapat menerima opsi -d untuk melakukan pengkategorian pada suatu directory. Namun pada opsi -d ini, user hanya bisa memasukkan input 1 directory saja, tidak seperti file yang bebas menginput file sebanyak mungkin.
 
 Contohnya adalah seperti ini:
+
 ```text
-$ ./soal3 -d /path/to/directory/
+$\ ./soal3 -d /path/to/directory/
 ```
+
 Perintah di atas akan mengkategorikan file di /path/to/directory, lalu hasilnya akan disimpan di working directory dimana program C tersebut berjalan (hasil kategori filenya bukan di /path/to/directory).
 
 Output yang dikeluarkan adalah seperti ini :
+
 ```text
 Jika berhasil, print “Direktori sukses disimpan!”
 Jika gagal, print “Yah, gagal disimpan :(“
 ```
+
 **(c)** Selain menerima opsi-opsi di atas, program ini menerima opsi \*, contohnya ada di bawah ini:
+
 ```text
-$ ./soal3 \*
+\$ ./soal3 \*
 ```
+
 Opsi ini akan mengkategorikan seluruh file yang ada di working directory ketika menjalankan program C tersebut.
 
 **(d)** Semua file harus berada di dalam folder, jika terdapat file yang tidak memiliki ekstensi, file disimpan dalam folder “Unknown”. Jika file hidden, masuk folder “Hidden”.
@@ -471,7 +489,8 @@ Opsi ini akan mengkategorikan seluruh file yang ada di working directory ketika 
 
 Namun karena Ayub adalah orang yang hanya bisa memberi ide saja, tidak mau bantuin buat bikin programnya, Ayub meminta bantuanmu untuk membuatkan programnya. Bantulah agar program dapat berjalan!
 
-Catatan: 
+Catatan:
+
 - Kategori folder tidak dibuat secara manual, harus melalui program C
 - Program ini tidak case sensitive. Contoh: JPG dan jpg adalah sama
 - Jika ekstensi lebih dari satu (contoh “.tar.gz”) maka akan masuk ke folder dengan titik terdepan (contoh “tar.gz”)
