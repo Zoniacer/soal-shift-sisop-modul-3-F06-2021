@@ -2181,3 +2181,83 @@ Dilakukan pthread_join dan menyimpan nilai return dalam variable flag agar dapat
 	...
 ```
 Jika menerima perintah -d maka dilakukan fungsi `listFilesRecursively` untuk menyimpan path file - file secara recursive.
+
+```c
+char catepath[100][100];
+int countlistrec=0;
+void listFilesRecursively(char *basePath)
+{
+    char path[1000];
+    struct dirent *dp;
+    DIR *dir = opendir(basePath);
+    int count = 0;
+    if (!dir)
+        return;
+
+    while ((dp = readdir(dir)) != NULL)
+    {
+        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0)
+        {
+            
+            // Construct new path from our base path
+            strcpy(path, basePath);
+            strcat(path, "/");
+            strcat(path, dp->d_name);
+	    if(dp->d_type == DT_REG)
+	    {
+	    	strcpy(catepath[countlistrec],path);
+	    	countlistrec++;
+	    }
+            listFilesRecursively(path);
+        }
+    }
+
+    closedir(dir);
+}
+```
+Jika file tersebut bukan direktori maka akan disimpan path dalam variable catepath dan menggunakan countlistrec sebagai counter berapa banyak file yang dikategorikan.
+Kembali ke main,
+```c
+	...
+	
+        count=0;
+        for(count=0; count<countlistrec; count++){
+            pthread_join(tid[count], &flag);
+            x = (int)flag;
+        }
+	if(x)printf("Direktori suskses disimpan!\n");
+        else if(!x || countlistrec==0)printf("Yah, gagal disimpan :(\n");
+        return 0;
+	
+	...
+```
+Dilakukan pthread_join seperti soal 3a tetapi ditambahkan syarat gagal jika `countlistrec==0` maka gagal dilakukan kategori.
+
+### **Jawaban Soal 3c,d,e**
+Dalam main
+```c
+   ...
+   
+   }else if (strcmp(argv[1], "*") == 0){
+
+        char *curr = getenv("PWD");
+        listFilesRecursively(curr);
+        
+        pthread_t tid[countlistrec];
+	int count=0;
+        for(int i=0; i<countlistrec; i++){
+            pthread_create(&tid[count], NULL, categorize, (void *)catepath[i]);
+            count++;
+        }
+
+        count=0;
+        for(count=0; count<countlistrec; count++){
+            int flag;
+            pthread_join(tid[count], NULL);
+            
+        }
+
+        return 0;       
+    }
+```
+Dalam soal 3c sama persis dengan no 3d hanya perbedaan path yang digunakan adalah path working direktori yang didapatkan lewat `getenv("PWD")`.
