@@ -462,8 +462,8 @@ File 3 : Berhasil Dikategorikan
 
 Contohnya adalah seperti ini:
 
-```text
-$\ ./soal3 -d /path/to/directory/
+```bash
+./soal3 -d /path/to/directory/
 ```
 
 Perintah di atas akan mengkategorikan file di /path/to/directory, lalu hasilnya akan disimpan di working directory dimana program C tersebut berjalan (hasil kategori filenya bukan di /path/to/directory).
@@ -477,8 +477,8 @@ Jika gagal, print “Yah, gagal disimpan :(“
 
 **(c)** Selain menerima opsi-opsi di atas, program ini menerima opsi \*, contohnya ada di bawah ini:
 
-```text
-\$ ./soal3 \*
+```bash
+./soal3 \*
 ```
 
 Opsi ini akan mengkategorikan seluruh file yang ada di working directory ketika menjalankan program C tersebut.
