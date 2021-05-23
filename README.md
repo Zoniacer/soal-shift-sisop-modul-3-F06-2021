@@ -114,21 +114,1024 @@ Struktur Direktori:
 
 ![Struktur direktori no. 1](https://media.discordapp.net/attachments/798177440425181256/845864050990907402/unknown.png)
 
+### Source code lengkap no. 1
+
+#### Server
+
+Pada fungsi main, dipanggil fungsi `setupServer()` untuk melakukan binding port dan listen ke port. Lalu dilakukan pemeriksaan pada file akun.txt, files.tsv, dan folder files. Apabila salah satunya tidak ada, maka akan langsung dibuat. Setelah itu dilakukan looping yang infinite dengan tujuan agar server always on. Di setiap loop, dilakukan penerimaan koneksi dan dilakukan pemanggilan fungsi `app()` pada thread baru. Ketika koneksi tadi selesai / terputus, baru akan dilakukan join thread dan menerima koneksi lain pada antrian. Saat mulai, server akan melakukan autentikasi user terlebih dahulu, apabila sudah, fitur-fitur baru dapat diakses.
+
+```c
+#include <stdio.h>
+#include <sys/socket.h>
+#include <stdlib.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <pthread.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/sendfile.h>
+#include <libgen.h>
+#define PORT 1111
+#define MAX_CONN 50
+#define MAX_CREDENTIALS_LENGTH 100
+#define MAX_INFORMATION_LENGTH 200
+#define EMPAT_KB 4096
+#define MAX_FILE_CHUNK EMPAT_KB
+#define FAIL_OR_SUCCESS_LENGTH 10
+#define LINE_COUNT_STR_LENGTH 20
+char failMsg[] = "false";
+char successMsg[] = "true";
+
+bool isFileExists(char filename[]) {
+    return access(filename, F_OK) == 0;
+}
+
+bool createFile(char filename[]) {
+    FILE * file = fopen(filename, "a");
+    if(file) {
+        fclose(file);
+        return true;
+    }
+    return false;
+}
+
+bool setupServer(int listen_port, int * server_fd, struct sockaddr_in * address) {
+    int valread;
+    int opt = 1;
+    bool success = true;
+    if ((*server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+    
+    success &= setsockopt(*server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) == 0;
+
+    address->sin_family = AF_INET;
+    address->sin_addr.s_addr = INADDR_ANY;
+    address->sin_port = htons( listen_port );
+      
+    success &= bind(*server_fd, (const struct sockaddr *)address, sizeof(*address)) >= 0;
+
+    return success & (listen(*server_fd, 10) == 0);
+}
+
+bool acceptConnection(int * new_socket, int * server_fd, struct sockaddr_in * address) {
+    int addrlen = sizeof(address);
+    return (*new_socket = accept(*server_fd, (struct sockaddr *)address, (socklen_t*)&addrlen)) != -1;
+}
+
+bool login(int socket, char authenticatedUser[]) {
+    char credentials[MAX_CREDENTIALS_LENGTH], file_credentials[MAX_CREDENTIALS_LENGTH];
+    memset(credentials, 0, MAX_CREDENTIALS_LENGTH);
+    int readStatus = read(socket, credentials, MAX_CREDENTIALS_LENGTH);
+    if(readStatus <= 0)
+        return false;
+    FILE * fileAkun = fopen("akun.txt", "r");
+    while(readStatus > 0 && fileAkun && fgets(file_credentials, MAX_CREDENTIALS_LENGTH, fileAkun) != NULL) {
+        if(file_credentials[strlen(file_credentials) - 1] == '\n')
+            file_credentials[strlen(file_credentials) - 1] = '\0';
+        if(strcmp(credentials, file_credentials) == 0) {
+            send(socket, "true", sizeof("true"), 0);
+            strcpy(authenticatedUser, credentials);
+            fclose(fileAkun);
+            return true;
+        }
+    }
+    send(socket, "false", sizeof("false"), 0);
+    fclose(fileAkun);
+    return false;
+}
+
+bool daftar(int socket) {
+    char credentials[MAX_CREDENTIALS_LENGTH];
+    memset(credentials, 0, MAX_CREDENTIALS_LENGTH);
+    int readStatus = read(socket, credentials, MAX_CREDENTIALS_LENGTH);
+    if(readStatus <= 0)
+        return false;
+    printf("Akun %s telah didaftarkan.\n", credentials);
+    FILE * fileAkun = fopen("akun.txt", "a");
+    if(fileAkun && readStatus > 0 && fprintf(fileAkun, "%s\n", credentials)) {
+        send(socket, "true", sizeof("true"), 0);
+        fclose(fileAkun);
+        return true;
+    }
+    send(socket, "false", sizeof("false"), 0);
+    fclose(fileAkun);
+    return false;
+}
+
+bool authentication(int socket, char authenticatedUser[]) {
+    char action[10];
+    memset(action, 0, sizeof(action));
+    int readStatus = read(socket, action, sizeof(action));
+    if(readStatus <= 0)
+        return -1;
+    if(strcmp(action, "register") == 0) {
+        daftar(socket);
+        return false;
+    } else if (strcmp(action, "login") == 0) {
+        return login(socket, authenticatedUser);
+    }
+    return false;
+}
+
+bool isFolderExists(char foldername[]) {
+    DIR * dir = opendir("FILES");
+    return dir != NULL;
+}
+
+void writeToBinaryFile(FILE * file, int chunk[], int size) {
+    int i=0;
+    for(; i<size; i++) {
+        if(chunk[i] == -1) break;
+        fputc(chunk[i], file);
+    }
+}
+
+FILE * readandSavefile(int socket, char filepath[]) {
+    chdir("FILES");
+    char isEOF[10];
+    int chunk[MAX_FILE_CHUNK];
+    char copy_of_filepath[strlen(filepath) + 1];
+    strcpy(copy_of_filepath, filepath);
+    FILE * file = fopen(basename(copy_of_filepath), "w");
+    do {
+        memset(isEOF, 0, sizeof(isEOF));
+        if(read(socket, isEOF, sizeof(isEOF)) <= 0)
+            return NULL;
+        memset(chunk, 0, sizeof(chunk));
+        if(read(socket, chunk, sizeof(chunk)) <= 0)
+            return NULL;
+        writeToBinaryFile(file, chunk, sizeof(chunk) / sizeof(int));
+    } while (strcmp(isEOF, "true") != 0);
+    chdir("../");
+    return file;
+}
+
+void logging(const char event[], const char filepath[], char authenticatedUser[]) {
+    FILE * logFile = fopen("running.log", "a");
+    char copy_of_filepath[strlen(filepath) + 1];
+    strcpy(copy_of_filepath, filepath);
+    if(logFile) {
+        fprintf(logFile, "%s : %s (%s)\n", event, basename(copy_of_filepath), authenticatedUser);
+        fclose(logFile);
+    }
+}
+
+bool addDataBuku(int socket, char *filepath) {
+    char information[MAX_INFORMATION_LENGTH];
+    memset(information, 0, MAX_INFORMATION_LENGTH);
+    int readStatus = read(socket, information, MAX_INFORMATION_LENGTH);
+    if(readStatus <= 0)
+        return false;
+    FILE * fileFile = fopen("files.tsv", "a");
+    if(fileFile && readStatus > 0 && fprintf(fileFile, "%s\n", information)) {
+        fclose(fileFile);
+        printf("Buku %s telah didaftarkan.\n", information);
+        strcpy(filepath, information);
+        return true;
+    }
+    fclose(fileFile);
+    return false;
+}
+
+void addBuku(int socket, char authenticatedUser[]) {
+    char filepath[MAX_INFORMATION_LENGTH];
+    if(!addDataBuku(socket, filepath)) {
+        send(socket, failMsg, sizeof(failMsg), 0);
+        return;
+    }
+    char * token = strtok(filepath, "|");
+    token = strtok(NULL, "|");
+    token = strtok(NULL, "|");
+    FILE * file = readandSavefile(socket, token);
+    if(file == NULL) {
+        send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+    }
+    fclose(file);
+    send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+    logging("Tambah", token, authenticatedUser);
+}
+
+int getLineCount(FILE * file) {
+    int cnt = 0;
+    char c;
+    if(file) {
+        while((c = getc(file)) != EOF) if(c == '\n') cnt++;
+        rewind(file);
+        return cnt;
+    }
+    return 0;
+}
+
+void seeFilesTsv(int socket) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    char information[MAX_INFORMATION_LENGTH];
+    sprintf(strLineCount, "%d", lineCount);
+    send(socket, strLineCount, LINE_COUNT_STR_LENGTH, 0);
+    while(file && lineCount--) {
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        fgets(information, MAX_INFORMATION_LENGTH, file);
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        send(socket, information, MAX_INFORMATION_LENGTH, 0);
+    }
+    fclose(file);
+}
+
+void findSpecificName(int socket, char subStrName[]) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    char information[MAX_INFORMATION_LENGTH];
+    sprintf(strLineCount, "%d", lineCount);
+    send(socket, strLineCount, LINE_COUNT_STR_LENGTH, 0);
+    while(file && lineCount--) {
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        fgets(information, MAX_INFORMATION_LENGTH, file);
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        char copy_of_information[strlen(information) + 1];
+        strcpy(copy_of_information, information);
+        char * publisher = strtok(information, "|");
+        char * tahun = strtok(NULL, "|");
+        char * filepath = strtok(NULL, "|");
+        char copy_of_filepath[strlen(filepath) + 1];
+        strcpy(copy_of_filepath, filepath);
+        char * filenameInTsv = basename(copy_of_filepath);
+        if(strstr(filenameInTsv, subStrName) == NULL) continue;
+        send(socket, copy_of_information, MAX_INFORMATION_LENGTH, 0);
+    }
+    send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+    fclose(file);
+}
+
+bool readBinaryFile(FILE * file, int chunk[], int size) {
+    int i=0, charFromFile;
+    for(i=0; i<size; i++) {
+        charFromFile = fgetc(file);
+        if(charFromFile == EOF) {
+            chunk[i] = -1;
+            break;
+        }
+        chunk[i] = charFromFile;
+    }
+    if(charFromFile == EOF) return false;
+    else return true;
+}
+
+bool isBookExistInTsv(char filename[]) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, sizeof information);
+        if(fgets(information, sizeof information, file) == NULL)
+            continue;
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        char * publisher = strtok(information, "|");
+        char * tahun = strtok(NULL, "|");
+        char * filepath = strtok(NULL, "|");
+        char copy_of_filepath[strlen(filepath) + 1];
+        strcpy(copy_of_filepath, filepath);
+        char * filenameInTsv = basename(copy_of_filepath);
+        if(strcmp(filenameInTsv, filename) == 0) return true;
+    }
+    return false;
+}
+
+bool readFileandSend(int socket, char filename[]) {
+    int chunk[MAX_FILE_CHUNK];
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    if(!isBookExistInTsv(filename)) {
+        send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+        return false;
+    }
+    chdir("FILES");
+    FILE * file = fopen(filename, "r");
+    if(file == NULL) {
+        printf("Tidak bisa membaca file.\n");
+        chdir("../");
+        return false;
+    }
+    send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+    while (true) {
+        char isEOF[10];
+        memset(isEOF, 0, sizeof(isEOF));
+        memset(chunk, 0, sizeof(chunk));
+        strcpy(isEOF, (readBinaryFile(file, chunk, sizeof(chunk) / sizeof(int)) ? "false" : "true"));
+        send(socket, isEOF, sizeof(isEOF), 0);
+        send(socket, chunk, sizeof(chunk), 0);
+        if(strcmp(isEOF, "true") == 0)
+            break;
+    };
+    chdir("../");
+    return strcmp(message, "true") == 0;
+}
+
+void deleteFromTsv(char filename[]) {
+    FILE * tsv = fopen("files.tsv", "r");
+    FILE * tsv2 = fopen("files2.tsv", "w");
+    if(tsv == NULL) return;
+    if(tsv2 == NULL) return;
+    int lineCount = getLineCount(tsv);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, sizeof information);
+        fgets(information, MAX_INFORMATION_LENGTH, tsv);
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        char copy_of_information[strlen(information) + 1];
+        strcpy(copy_of_information, information);
+        char * publisher = strtok(information, "|");
+        char * tahun = strtok(NULL, "|");
+        char * filepath = strtok(NULL, "|");
+        char copy_of_filepath[strlen(filepath) + 1];
+        strcpy(copy_of_filepath, filepath);
+        char * filenameInTsv = basename(copy_of_filepath);
+        if(strcmp(filenameInTsv, filename) == 0) continue;
+        fprintf(tsv2, "%s\n", copy_of_information);
+    }
+    fclose(tsv); fclose(tsv2);
+    remove("files.tsv"); rename("files2.tsv", "files.tsv");
+}
+
+void deleteBook(int socket, char filename[], char authenticatedUser[]) {
+    if(!isBookExistInTsv(filename)) {
+        send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+        return;
+    }
+    chdir("FILES");
+    char newfilename[MAX_INFORMATION_LENGTH];
+    sprintf(newfilename, "old-%s", filename);
+    send(socket, (rename(filename, newfilename) != 0 ? successMsg : failMsg), FAIL_OR_SUCCESS_LENGTH, 0);
+    chdir("../");
+    deleteFromTsv(filename);
+    logging("Hapus", filename, authenticatedUser);
+    send(socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+}
+
+void * app(void * vargp) {
+    int socket = *((int *)vargp);
+    char authenticatedUser[MAX_CREDENTIALS_LENGTH];
+    int authStatus = false;
+    while(!authStatus) {
+        authStatus = authentication(socket, authenticatedUser);
+        if(authStatus == -1) { // Connection closed
+            return NULL;
+        }
+    }
+    while(true) {
+        char action[MAX_INFORMATION_LENGTH];
+        memset(action, 0, MAX_INFORMATION_LENGTH);
+        int readStatus = read(socket, action, MAX_INFORMATION_LENGTH);
+        if(readStatus <= 0)
+            return NULL;
+        if(readStatus > 0 && strcmp("add", action) == 0) {
+            addBuku(socket, authenticatedUser);
+        } else if(readStatus > 0 && strcmp("see", action) == 0) {
+            seeFilesTsv(socket);
+        } else if(readStatus > 0 && strcmp("find", action) == 0) {
+            char subfilename[MAX_INFORMATION_LENGTH];
+            memset(subfilename, 0, sizeof(subfilename));
+            if(read(socket, subfilename, MAX_INFORMATION_LENGTH) <= 0)
+                return NULL;
+            findSpecificName(socket, subfilename);
+        } else if(readStatus > 0 && strcmp("download", action) == 0) {
+            char filename[MAX_INFORMATION_LENGTH];
+            memset(filename, 0, sizeof(filename));
+            if(read(socket, filename, MAX_INFORMATION_LENGTH) <= 0)
+                return NULL;
+            readFileandSend(socket, filename);
+        } else if(readStatus > 0 && strcmp("delete", action) == 0) {
+            char filename[MAX_INFORMATION_LENGTH];
+            memset(filename, 0, sizeof(filename));
+            if(read(socket, filename, MAX_INFORMATION_LENGTH) <= 0)
+                return NULL;
+            deleteBook(socket, filename, authenticatedUser);
+        }
+    }
+    return NULL;
+}
+
+int main() {
+    struct sockaddr_in address;
+    int server_fd;
+    pthread_t tid;
+
+    if(!setupServer(PORT, &server_fd, &address)) {
+        printf("Gagal membuat server\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if(!isFileExists("akun.txt")) createFile("akun.txt");
+    if(!isFileExists("files.tsv")) createFile("files.tsv");
+    if(!isFolderExists("FILES")) mkdir("FILES", S_IRWXU);
+
+    while(true) {
+        int new_socket;
+        if(!acceptConnection(&new_socket, &server_fd, &address)) {
+            printf("Tidak dapat menerima koneksi.\n");
+            continue;
+        }
+        printf("Koneksi baru diterima.\n");
+        send(new_socket, successMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+        pthread_create(&tid, NULL, app, (void *)&new_socket);
+        pthread_join(tid, NULL);
+        close(new_socket);
+        printf("Koneksi selesai.\n");
+    }
+    return 0;
+}
+```
+
+#### Client
+
+Pertama, pada fungsi main dilakukan pemanggilan fungsi `setupClient()` untuk menginisiasi socket dan menyambungkan ke server. Setelah itu, socket akan menunggu hingga koneksi diterima oleh server. Setelah diterima, maka aplikasi akan dijalankan. Aplikasi akan melakukan autentikasi user terlebih dahulu, apabila sudah, fitur-fitur baru dapat diakses.
+
+```c
+#include <stdio.h>
+#include <sys/socket.h>
+#include <stdlib.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <string.h>
+#include <stdbool.h>
+#include <libgen.h>
+#define PORT 1111
+#define MAX_INFORMATION_LENGTH 200
+#define EMPAT_KB 4096
+#define MAX_FILE_CHUNK EMPAT_KB
+#define FAIL_OR_SUCCESS_LENGTH 10
+#define MAX_CREDENTIALS_LENGTH 100
+#define LINE_COUNT_STR_LENGTH 20
+char failMsg[] = "false";
+char successMsg[] = "true";
+#define invalidCmd "\nMaaf, command yang anda masukkan tidak valid\n"
+
+bool setupClient(int * sock) {
+    struct sockaddr_in address;
+    struct sockaddr_in serv_addr;
+    if ((*sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        printf("\n Socket creation error \n");
+        return false;
+    }
+  
+    memset(&serv_addr, '0', sizeof(serv_addr));
+  
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
+      
+    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0) {
+        printf("\nInvalid address/ Address not supported \n");
+        return false;
+    }
+  
+    if (connect(*sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        printf("\nConnection Failed \n");
+        return false;
+    }
+    return true;
+}
+
+void getlineRemoveNewline(char dest[]) {
+    fgets(dest, MAX_INFORMATION_LENGTH, stdin);
+    if(dest[strlen(dest) - 1] == '\n')
+        dest[strlen(dest) - 1] = '\0';
+}
+
+void daftar(int socket) {
+    char id[MAX_CREDENTIALS_LENGTH], password[45];
+    printf("Masukkan id : ");
+    getlineRemoveNewline(id);
+    printf("Masukkan password : ");
+    getlineRemoveNewline(password);
+    char *credential = strcat(id, ":");
+    strcat(credential, password);
+    send(socket , credential, MAX_CREDENTIALS_LENGTH , 0);
+    char message[50];
+    int readStatus = read(socket , message, sizeof(message));
+    if(readStatus > 0 && strcmp(message, "true") == 0) {
+        printf("Daftar berhasil.\n");
+        return;
+    }
+    printf("Daftar gagal.\n");
+}
+
+bool login(int socket) {
+    char id[MAX_CREDENTIALS_LENGTH], password[45];
+    printf("Masukkan id : ");
+    getlineRemoveNewline(id);
+    printf("Masukkan password : ");
+    getlineRemoveNewline(password);
+    char *credential = strcat(id, ":");
+    strcat(credential, password);
+    send(socket , credential, MAX_CREDENTIALS_LENGTH , 0);
+    char message[50];
+    int readStatus = read(socket , message, sizeof(message));
+    if(readStatus > 0 && strcmp(message, "true") == 0) {
+        printf("Login berhasil.\n");
+        return true;
+    }
+    printf("Login gagal.\n");
+    return false;
+}
+
+bool readBinaryFile(FILE * file, int chunk[], int size) {
+    int i=0, charFromFile;
+    for(i=0; i<size; i++) {
+        charFromFile = fgetc(file);
+        if(charFromFile == EOF) {
+            chunk[i] = -1;
+            break;
+        }
+        chunk[i] = charFromFile;
+    }
+    if(charFromFile == EOF) return false;
+    else return true;
+}
+
+bool readFileandSend(int socket, char filename[]) {
+    int chunk[MAX_FILE_CHUNK];
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    FILE * file = fopen(filename, "r");
+    if(file == NULL) {
+        printf("Tidak bisa membaca file.\n");
+        return false;
+    }
+    while (true) {
+        char isEOF[10];
+        memset(isEOF, 0, sizeof(isEOF));
+        memset(chunk, 0, sizeof(chunk));
+        strcpy(isEOF, (readBinaryFile(file, chunk, sizeof(chunk) / sizeof(int)) ? "false" : "true"));
+        send(socket, isEOF, sizeof(isEOF), 0);
+        send(socket, chunk, sizeof(chunk), 0);
+        if(strcmp(isEOF, "true") == 0)
+            break;
+    };
+    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(socket, message, FAIL_OR_SUCCESS_LENGTH);
+    return strcmp(message, "true") == 0;
+}
+
+void writeToBinaryFile(FILE * file, int chunk[], int size) {
+    int i=0;
+    for(; i<size; i++) {
+        if(chunk[i] == -1) break;
+        fputc(chunk[i], file);
+    }
+}
+
+FILE * readandSavefile(int socket, char filename[]) {
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(socket, message, FAIL_OR_SUCCESS_LENGTH);
+    if(strcmp(message, failMsg) == 0) {
+        printf("File tidak ada di dalam server.\n");
+        return NULL;
+    }
+    char isEOF[10];
+    int chunk[MAX_FILE_CHUNK];
+    FILE * file = fopen(filename, "w");
+    do {
+        memset(isEOF, 0, sizeof(isEOF));
+        read(socket, isEOF, sizeof(isEOF));
+        memset(chunk, 0, sizeof(chunk));
+        read(socket, chunk, sizeof(chunk));
+        writeToBinaryFile(file, chunk, sizeof(chunk) / sizeof(int));
+    } while (strcmp(isEOF, "true") != 0);
+    if(file) printf("File %s selesai didownload.\n", filename);
+    else printf("File %s gagal didownload.\n", filename);
+    return file;
+}
+
+void addBuku(int socket) {
+    char publisher[MAX_INFORMATION_LENGTH / 3], filepath[MAX_INFORMATION_LENGTH / 3];
+    char bookInfo[MAX_INFORMATION_LENGTH];
+    int tahun;
+    printf("Publisher: ");
+    getlineRemoveNewline(publisher);
+    printf("Tahun Publikasi: ");
+    scanf("%d", &tahun);
+    getchar();
+    printf("Filepath: ");
+    getlineRemoveNewline(filepath);
+    sprintf(bookInfo, "%s|%d|%s", publisher, tahun, filepath);
+    send(socket , bookInfo, MAX_INFORMATION_LENGTH , 0);
+    if(readFileandSend(socket, filepath)) {
+        printf("Buku ditambahkan.\n");
+        return;
+    }
+    printf("Buku gagal ditambahkan.\n");
+}
+
+bool authentication(int sock) {
+    const char loginPrompt[] = "Silahkan daftar atau login terlebih dahulu.";
+    puts(loginPrompt);
+    char action[10];
+    printf("(login / register / exit) : ");
+    getlineRemoveNewline(action);
+    if(strcmp(action, "register") == 0) {
+        send(sock , action, strlen(action) , 0);
+        daftar(sock);
+    } else if(strcmp(action, "login") == 0) {
+        send(sock , action, strlen(action) , 0);
+        return login(sock);
+    } else if(strcmp(action, "exit") == 0) {
+        close(sock);
+        exit(EXIT_SUCCESS);
+    } else puts(invalidCmd);
+    return false;
+}
+
+void printBookInfo(char information[]) {
+    char * publisher = strtok(information, "|");
+    char * tahun = strtok(NULL, "|");
+    char * filepath = strtok(NULL, "|");
+    char copy_of_filepath[strlen(filepath) + 1];
+    strcpy(copy_of_filepath, filepath);
+    char * namaplusext = basename(copy_of_filepath);
+    char * nama = strtok(namaplusext, ".");
+    char * ext = strtok(NULL, ".");
+    printf("Nama: %s\n", nama);
+    printf("Publisher: %s\n", publisher);
+    printf("Tahun publishing: %s\n", tahun);
+    printf("Ekstensi File: %s\n", ext);
+    printf("Filepath: %s\n\n", filepath);
+}
+
+void receiveFilesTsv(int socket) {
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
+    int lineCount = atoi(strLineCount);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        read(socket, information, MAX_INFORMATION_LENGTH);
+        printBookInfo(information);
+    }
+}
+
+void findSpecificName(int socket) {
+    char filename[MAX_INFORMATION_LENGTH];
+    getlineRemoveNewline(filename);
+    send(socket, filename, sizeof(filename), 0);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
+    int lineCount = atoi(strLineCount);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        read(socket, information, MAX_INFORMATION_LENGTH);
+        if(strcmp(information, failMsg) == 0) break;
+        printBookInfo(information);
+    }
+}
+
+void deleteBook(int sock) {
+    char filename[MAX_INFORMATION_LENGTH];
+    getlineRemoveNewline(filename);
+    send(sock, filename, sizeof(filename), 0);
+    char message[FAIL_OR_SUCCESS_LENGTH];
+    memset(message, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(sock, message, FAIL_OR_SUCCESS_LENGTH);
+    if(strcmp(message, failMsg) == 0) printf("Gagal menghapus file.\n");
+    else printf("Sukses menghapus file.\n");
+}
+
+void printPrompt() {
+    printf("\nList perintah :\n");
+    printf("1. add\n");
+    printf("2. download x (x: nama file yang ingin didownload)\n");
+    printf("3. delete x (x: nama file yang ingin dihapus)\n");
+    printf("4. see\n");
+    printf("5. find x (x: nama file yang ingin dicari)\n");
+    printf("6. exit\n");
+    printf("Masukkan perintah : ");
+}
+
+void executePrompt(int sock, char action[]) {
+    if(strcmp("add", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        addBuku(sock);
+    } else if(strcmp("see", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        receiveFilesTsv(sock);
+    } else if(strcmp("download", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        char filename[MAX_INFORMATION_LENGTH];
+        getlineRemoveNewline(filename);
+        send(sock, filename, sizeof(filename), 0);
+        FILE * buku = readandSavefile(sock, filename);
+        if(buku) fclose(buku);
+    } else if(strcmp("exit", action) == 0) {
+        close(sock);
+        exit(EXIT_SUCCESS);
+    } else if(strcmp("delete", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        deleteBook(sock);
+    } else if(strcmp("find", action) == 0) {
+        send(sock, action, MAX_INFORMATION_LENGTH, 0);
+        findSpecificName(sock);
+    } else puts(invalidCmd);
+}
+
+int main(int argc, char const *argv[]) {
+    int sock = 0, valread;
+    if(!setupClient(&sock)) {
+        printf("Gagal inisiasi client\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    puts("Menunggu hingga koneksi diterima.");
+    char acceptedConnection[FAIL_OR_SUCCESS_LENGTH];
+    memset(acceptedConnection, 0, FAIL_OR_SUCCESS_LENGTH);
+    read(sock, acceptedConnection, FAIL_OR_SUCCESS_LENGTH);
+    if(strcmp(acceptedConnection, successMsg) == 0) {
+        puts("Koneksi diterima.");
+    } else {
+        puts("Koneksi gagal.");
+        exit(EXIT_FAILURE);
+    }
+
+    while(!authentication(sock));
+
+    printf("User authenticated.\n");
+    while(true) {
+        char action[MAX_INFORMATION_LENGTH];
+        memset(action, 0, MAX_INFORMATION_LENGTH);
+        printPrompt();
+        scanf("%s", action);
+        getchar();
+        executePrompt(sock, action);
+    }
+    return 0;
+}
+```
+
 ### **Jawaban Soal 1a**
+
+#### 1a pada server.c
+
+Pada fungsi `app()` dilakukan looping hingga autentikasi selesai, namun apabila koneksi terputus di tengah jalan, maka langsung end aplikasi.
+
+```c
+while(!authStatus) {
+    authStatus = authentication(socket, authenticatedUser);
+    if(authStatus == -1) { // Connection closed
+        return NULL;
+    }
+}
+```
+
+Fungsi `authentication()` akan handle autentikasi dengan menyediakan dua pilihan, login / register. Apabila user melakukan login dan sukses, akan direturn true, sebaliknya selalu false kecuali kalau koneksi terputus akan return -1.
+
+```c
+bool authentication(int socket, char authenticatedUser[]) {
+    char action[10];
+    memset(action, 0, sizeof(action));
+    int readStatus = read(socket, action, sizeof(action));
+    if(readStatus <= 0)
+        return -1;
+    if(strcmp(action, "register") == 0) {
+        daftar(socket);
+        return false;
+    } else if (strcmp(action, "login") == 0) {
+        return login(socket, authenticatedUser);
+    }
+    return false;
+}
+```
+
+Fungsi `daftar()` akan menerima request dari client berupa id dan password lalu menyimpannya ke `akun.txt`
+
+```c
+bool daftar(int socket) {
+    char credentials[MAX_CREDENTIALS_LENGTH];
+    memset(credentials, 0, MAX_CREDENTIALS_LENGTH);
+    int readStatus = read(socket, credentials, MAX_CREDENTIALS_LENGTH);
+    if(readStatus <= 0)
+        return false;
+    printf("Akun %s telah didaftarkan.\n", credentials);
+    FILE * fileAkun = fopen("akun.txt", "a");
+    if(fileAkun && readStatus > 0 && fprintf(fileAkun, "%s\n", credentials)) {
+        send(socket, "true", sizeof("true"), 0);
+        fclose(fileAkun);
+        return true;
+    }
+    send(socket, "false", sizeof("false"), 0);
+    fclose(fileAkun);
+    return false;
+}
+```
+
+Fungsi `login()` akan menerima request dari client berupa id dan password lalu membandingkan dengan record pada `akun.txt`
+
+```c
+bool login(int socket, char authenticatedUser[]) {
+    char credentials[MAX_CREDENTIALS_LENGTH], file_credentials[MAX_CREDENTIALS_LENGTH];
+    memset(credentials, 0, MAX_CREDENTIALS_LENGTH);
+    int readStatus = read(socket, credentials, MAX_CREDENTIALS_LENGTH);
+    if(readStatus <= 0)
+        return false;
+    FILE * fileAkun = fopen("akun.txt", "r");
+    while(readStatus > 0 && fileAkun && fgets(file_credentials, MAX_CREDENTIALS_LENGTH, fileAkun) != NULL) {
+        if(file_credentials[strlen(file_credentials) - 1] == '\n')
+            file_credentials[strlen(file_credentials) - 1] = '\0';
+        if(strcmp(credentials, file_credentials) == 0) {
+            send(socket, "true", sizeof("true"), 0);
+            strcpy(authenticatedUser, credentials);
+            fclose(fileAkun);
+            return true;
+        }
+    }
+    send(socket, "false", sizeof("false"), 0);
+    fclose(fileAkun);
+    return false;
+}
+```
+
+#### 1a pada client.c
+
+Secara garis besar, strukturnya mirip seperti pada `server.c`, namun disini yang dilakukan adalah handle input dari user dan mengirimnya ke server.
+
+##### Autentikasi pada main
+
+```c
+while(!authentication(sock));
+```
+
+##### Fungsi autentikasi
+
+Mengambil input dari user dan handle permintaan user.
+
+```c
+bool authentication(int sock) {
+    const char loginPrompt[] = "Silahkan daftar atau login terlebih dahulu.";
+    puts(loginPrompt);
+    char action[10];
+    printf("(login / register / exit) : ");
+    getlineRemoveNewline(action);
+    if(strcmp(action, "register") == 0) {
+        send(sock , action, strlen(action) , 0);
+        daftar(sock);
+    } else if(strcmp(action, "login") == 0) {
+        send(sock , action, strlen(action) , 0);
+        return login(sock);
+    } else if(strcmp(action, "exit") == 0) {
+        close(sock);
+        exit(EXIT_SUCCESS);
+    } else puts(invalidCmd);
+    return false;
+}
+```
+
+##### Fungsi login
+
+Mengambil input dari user dan mengirim ke server setelah dilakukan pemformatan `id:password`.
+
+```c
+bool login(int socket) {
+    char id[MAX_CREDENTIALS_LENGTH], password[45];
+    printf("Masukkan id : ");
+    getlineRemoveNewline(id);
+    printf("Masukkan password : ");
+    getlineRemoveNewline(password);
+    char *credential = strcat(id, ":");
+    strcat(credential, password);
+    send(socket , credential, MAX_CREDENTIALS_LENGTH , 0);
+    char message[50];
+    int readStatus = read(socket , message, sizeof(message));
+    if(readStatus > 0 && strcmp(message, "true") == 0) {
+        printf("Login berhasil.\n");
+        return true;
+    }
+    printf("Login gagal.\n");
+    return false;
+}
+```
+
+##### Fungsi daftar
+
+Mengambil input dari user dan mengirim ke server setelah dilakukan pemformatan `id:password`
+
+```c
+bool daftar(int socket) {
+    char credentials[MAX_CREDENTIALS_LENGTH];
+    memset(credentials, 0, MAX_CREDENTIALS_LENGTH);
+    int readStatus = read(socket, credentials, MAX_CREDENTIALS_LENGTH);
+    if(readStatus <= 0)
+        return false;
+    printf("Akun %s telah didaftarkan.\n", credentials);
+    FILE * fileAkun = fopen("akun.txt", "a");
+    if(fileAkun && readStatus > 0 && fprintf(fileAkun, "%s\n", credentials)) {
+        send(socket, "true", sizeof("true"), 0);
+        fclose(fileAkun);
+        return true;
+    }
+    send(socket, "false", sizeof("false"), 0);
+    fclose(fileAkun);
+    return false;
+}
+```
 
 ### **Jawaban Soal 1b**
 
+#### 1b pada server.c
+
+```c
+
+```
+
+#### 1b pada client.c
+
+```c
+```
+
 ### **Jawaban Soal 1c**
+
+#### 1c pada server.c
+
+```c
+
+```
+
+#### 1c pada client.c
+
+```c
+```
 
 ### **Jawaban Soal 1d**
 
+#### 1d pada server.c
+
+```c
+
+```
+
+#### 1d pada client.c
+
+```c
+```
+
 ### **Jawaban Soal 1e**
+
+#### 1e pada server.c
+
+```c
+
+```
+
+#### 1e pada client.c
+
+```c
+```
 
 ### **Jawaban Soal 1f**
 
+#### 1f pada server.c
+
+```c
+
+```
+
+#### 1f pada client.c
+
+```c
+```
+
 ### **Jawaban Soal 1g**
 
+#### 1g pada server.c
+
+```c
+
+```
+
+#### 1g pada client.c
+
+```c
+```
+
 ### **Jawaban Soal 1h**
+
+#### 1h pada server.c
+
+```c
+
+```
+
+#### 1h pada client.c
+
+```c
+```
 
 ### **Kendala pengerjaan No.1 :**
 
