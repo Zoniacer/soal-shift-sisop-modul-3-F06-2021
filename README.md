@@ -2012,3 +2012,172 @@ Catatan:
 - Jika ekstensi lebih dari satu (contoh “.tar.gz”) maka akan masuk ke folder dengan titik terdepan (contoh “tar.gz”)
 - Dilarang juga menggunakan fork-exec dan system()
 - Bagian b dan c berlaku rekursif
+
+### **Jawaban Soal 3a,d,e**
+
+```c
+int main(int argc, char *argv[]){
+    if(argc == 0){
+        exit(EXIT_FAILURE);
+    }
+
+    if(strcmp(argv[1], "-f") == 0){
+	void *flag=0;
+	int x;
+        pthread_t tid[argc-2];
+	int count=0;
+        for(int i=2; i<argc; i++){
+            pthread_create(&tid[count], NULL, categorize, (void *)argv[i]);
+            count++;
+        }
+	...
+```
+Pertama menerima input dalam main dengan `int main(int argc, char *argv[])` dan jika menerima perintah `-f` dalam potongan kodingan berikut `if(strcmp(argv[1], "-f") == 0)` kemudian dibuat thread untuk ke dalam fungsi `categorize(void *arg)` sebanyak argc-2 dalam potongan kodingan berikut ini. Fungsi ini membuat dir atau memasukin file sesuai extensi jika file tersebut ada dan bukan direktori.
+```c
+	for(int i=2; i<argc; i++){
+            pthread_create(&tid[count], NULL, categorize, (void *)argv[i]);
+            count++;
+        }
+```
+Fungsi categorize
+
+```c
+void* categorize(void *arg){
+    char *src = (char *)arg;
+    struct stat path_stat;
+    stat(src, &path_stat);
+    if(access(src, F_OK)!=0|| S_ISDIR(path_stat.st_mode)){
+	pthread_mutex_lock(&signal);
+    	pthread_mutex_unlock(&signal);
+    	return (void *) 0;
+    }
+    else{
+    char srcP[150];
+    memcpy(srcP, (char*)arg, 150);
+    char *srcExt = checkExt(src);
+    
+    DIR *dir = opendir(srcExt);
+    if(dir == NULL){
+        mkdir(srcExt, S_IRWXU);
+    }
+
+    char *srcName = checkName(srcP);
+    char *curr = getenv("PWD");
+    
+    char *destP = malloc(strlen(srcExt) + 1 + strlen(srcName) + 1 + strlen(curr) + 1);
+    strcpy(destP, curr);
+    strcat(destP, "/");
+    strcat(destP, srcExt);
+    strcat(destP, "/");
+    strcat(destP, srcName);
+    pthread_mutex_lock(&signal);
+    if(rename(srcP, destP) != 0){
+        fprintf(stderr,"error: %s\n\n",strerror(errno));
+    }
+    pthread_mutex_unlock(&signal);
+    return (void *) 1;
+    }
+    pthread_mutex_lock(&signal);
+    pthread_mutex_unlock(&signal); 
+}
+```
+Fungsi ini pertama cek apabila path yang diberikan tidak ada dan apabila path tersebut direktori dalam kodingan berikut `if(access(src, F_OK)!=0|| S_ISDIR(path_stat.st_mode))`, jika masuk syarat tersebut maka dilakukan `return (void *) 0;`.
+Kemudian path tersebut masuk pada fungsi `checkExt(char *dir)` yang disimpan dalam `char *srcExt`. Fungsi ini mencari extensi dari path yang diberikan.
+
+```c
+char *checkExt(char *dir){
+    char *hid = {"Hidden"};
+    char *extdot = strrchr(dir,'/');
+    char dot[2]=".";
+    if(extdot[1]==dot[0]){
+    	return hid;
+    }
+    char *unk = {"Unknown"};
+    char *ext = strchr(dir, '.');
+    if(ext != NULL)
+        return lowercase(ext + 1);
+    return unk;
+}
+```
+Dalam fungsi ini pertama dicek apabila file tersebut file Hidden dengan `if(extdot[1]==dot[0])` dimana `dot[0]` merupakan titik dan `extdot` merupakan nama file yang digunakan `strrchr(dir,'/')`, fungsi ini mencari `/` paling akhir. Jika masuk syarat hidden file maka `return hid`, mengembalikan nama direktori `Hidden` Lalu dicek jika memiliki extension, dimana `if(ext != NULL)` maka dilakukan `return lowercase(ext + 1)` mengembalikan extention untuk nama direktori dalam bentuk lowercase. Jika tidak memiliki extention maka `return unk` mengembalikan nama direktori `Unknown`. Berikut fungsi `lowercase()`
+```c
+char *lowercase(char *str){
+    unsigned char *temp = (unsigned char *)str;
+
+    while(*temp){
+        *temp = tolower(*temp);
+        temp++;
+    }
+    return str;
+}
+```
+Lalu sudah dikembalikan nama direktori dibuatlah direktori tersebut jika belum ada dengen kodingan berikut.
+```c
+    DIR *dir = opendir(srcExt);
+    if(dir == NULL){
+        mkdir(srcExt, S_IRWXU);
+    }
+```
+`S_IRWXU` ini agar dapat permission read, write, extecute/search.
+
+Setelah dibuat direktori tersebut disimpan dulu nama file tersebut dengan fungsi `chekName()` dan menyimpan path working direktori dengan fungsi `getenv("PWD")`.
+```c
+    char *srcName = checkName(srcP);
+    char *curr = getenv("PWD");
+```
+Berikut fungsi checkName
+```c
+char *checkName(char *dir){
+    char *name = strrchr(dir, '/');
+    if(name == dir)
+        return "";
+    return name + 1;
+}
+```
+Sesudah menyimpan nama file dan path working direktori dibuatlah string untuk menyimpan path untuk ke direktori baru sebagai berikut.
+```c
+    char *destP = malloc(strlen(srcExt) + 1 + strlen(srcName) + 1 + strlen(curr) + 1);
+    strcpy(destP, curr);
+    strcat(destP, "/");
+    strcat(destP, srcExt);
+    strcat(destP, "/");
+    strcat(destP, srcName);
+```
+Fungsi malloc agar menyediakan tempat untuk variable `destP`, kemudian fungsi `strcpy(destP, curr)` untuk copy path working direktori ke `destP`. Lalu dilakukan concate "/", nama file direktori, "/",dan nama file.
+
+Sesudah path destinasi lalu dipindah menggunakan fungsi rename.
+```c
+    if(rename(srcP, destP) != 0){
+        fprintf(stderr,"error: %s\n\n",strerror(errno));
+    }
+```
+Lalu `return (void *) 1` menandakan berhasil dilakukan categorize.
+
+Kembali pada main,
+```c
+        ...
+        
+        count=0;
+        for(count=0; count<argc-2; count++){
+        
+            pthread_join(tid[count], &flag);
+            x = (int)flag;
+            if(x)printf("File %d : Berhasil Dikategorikan\n", count+1);
+            else if(!x)printf("File %d : Sad, gagal :(\n",count+1);
+        }
+```
+Dilakukan pthread_join dan menyimpan nilai return dalam variable flag agar dapat mengtahui jika berhasil atau tidak dilakukannya categorize.
+
+### **Jawaban Soal 3b,d,e**
+
+```c
+    ...
+    
+    }else if(strcmp(argv[1], "-d") == 0){
+	void *flag=0;
+	int x=0;
+	listFilesRecursively(argv[2]);
+    
+	...
+```
+Jika menerima perintah -d maka dilakukan fungsi `listFilesRecursively` untuk menyimpan path file - file secara recursive.
