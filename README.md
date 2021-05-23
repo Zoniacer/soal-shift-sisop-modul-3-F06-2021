@@ -2261,3 +2261,11 @@ Dalam main
     }
 ```
 Dalam soal 3c sama persis dengan no 3d hanya perbedaan path yang digunakan adalah path working direktori yang didapatkan lewat `getenv("PWD")`.
+
+
+### **Kendala Soal No. 3**
+
+1. Pada saat mengerjakan 3a bermasalah saat file tidak ditemukan tetapi masih melakukan output berhasil.
+2. Pada saat mengerjakan 3b bermasalah saat file tidak ditemukan mendapat error segemntation fault berkali - kali
+
+![Screenshot 2021-05-06 210519](https://user-images.githubusercontent.com/63639703/119249949-ff88b480-bbc6-11eb-9a35-86f09485abe5.png)
