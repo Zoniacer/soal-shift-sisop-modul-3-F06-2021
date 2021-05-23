@@ -263,6 +263,162 @@ for (i = 0; i < ROW; i++) {
     }
 }
 ```
+Kemudian berikut adalah **Source Code** lengkap dari soal2b:
+```C
+#include<stdio.h>
+#include<string.h>
+#include<pthread.h>
+#include<stdlib.h>
+#include<unistd.h>
+#include<sys/types.h>
+#include<sys/wait.h>
+#include<sys/shm.h>
+#include<sys/ipc.h>
+#define ull unsigned long long
+#define ROW 4
+#define COL 6
+pthread_t tid[25];
+ull mx_pass[4][6],mx_batas[4][6],HASIL[4][6];
+
+ull fact(ull n){
+
+    if(n==1 || n==0) return 1;
+    
+    ull temp = n;
+    for(int i=n-1;i>=1;i--){
+        temp*=i;
+    }
+    return temp;
+}
+
+ull mtx_fact(ull n,ull batas){
+    if(n == 0 || batas == 0) return 0;
+    if(n<batas) return fact(n);
+    if(n>=batas) return fact(n)/fact(n-batas);
+}
+
+void* mtx_thread (void *arg) {
+    int status;
+    pthread_t id = pthread_self();
+    for(int i = 0; i<ROW; i++){
+        status=0;
+        for (int j = 0; j < COL; j++){
+            if (pthread_equal(id, tid[i*COL+j])){
+                HASIL[i][j] = mtx_fact(mx_pass[i][j],mx_batas[i][j]);
+                status=1;
+                break;
+            }   
+        }
+        if(status==1)break;
+    }
+}
+
+int main(){
+    int *share_matriks,i,j;
+
+    key_t key = 1234;
+    int shmid = shmget(key, sizeof(int[ROW][COL]), IPC_CREAT | 0666);
+    share_matriks = (int*)shmat(shmid, NULL, 0);
+
+    printf("MATRIKS PASSING\n");
+    for(i=0;i<ROW;i++){
+        for(j=0;j<COL;j++){
+            mx_pass[i][j] = share_matriks[i*COL+j];
+            printf("%llu\t",mx_pass[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\nINPUT MATRIKS BATAS :\n");
+    for(i=0;i<ROW;i++){
+        for(j=0;j<COL;j++){
+            scanf("%llu",&mx_batas[i][j]);
+        }
+    }
+
+    for (i = 0; i < ROW; i++) {
+        for(j = 0; j < COL; j++){
+            int err = pthread_create(&(tid[i*COL+j]), NULL, &mtx_thread, NULL);
+            if(err!=0){
+                printf("\n can't create thread : [%s]",strerror(err));
+            }
+        }
+    }
+    for(i=0;i<ROW*COL-1;i++){
+        pthread_join(tid[i], NULL);
+    }
+    printf("\nMATRIKS HASIL FACTORIAL :\n");
+    for(i=0;i<ROW;i++){
+        for(j=0;j<COL;j++){
+            printf("%llu\t",HASIL[i][j]);
+        }
+        printf("\n");
+    }
+    return 0;
+}
+```
+
+Lalu berikut untuk tampilan saat kode dari soal2a dan soal2b dijalankan:
+
+![image](https://user-images.githubusercontent.com/40484843/119246083-a6aa2380-bba8-11eb-809f-223d9e3046c3.png)
+
+### **Jawaban Soal 2c**
+
+Pada soal2c kita diminta untuk membuat program yang akan menampilkan 5 program teratas yang memakan resource komputer sekarang, disini diminta untuk menggunakan pipe. Caranya adalah dengan membuat 2 buah pipe yang menghubungkan 3 command, berikut kode nya:
+```C
+ // create pipe1
+    if (pipe(pipe1) == -1){
+        perror("pipe1 failed");
+        exit(1);
+    }
+
+    // fork (ps aux)
+    if ((pid = fork()) == -1){
+        perror("fork1 failed");
+        exit(1);
+    }
+    else if (pid == 0){
+        comm1();
+    }
+
+    // create pipe2
+    if (pipe(pipe2) == -1){
+        perror("pipe2 failed");
+        exit(1);
+    }
+
+    // fork (sort -nrk 3,3)
+    if ((pid = fork()) == -1){
+        perror("fork2 failed");
+        exit(1);
+    }
+    else if (pid == 0){
+        comm2();
+    }
+
+    close(pipe1[0]);
+    close(pipe1[1]);
+
+    // fork (head 5)
+    if ((pid = fork()) == -1){
+        perror("fork3 failed");
+        exit(1);
+    }
+    else if (pid == 0){
+        comm3();
+    }else{
+	execlp("^C","^C",NULL);
+    }
+```
+Pertama adalah membuat pipe pertama kemudian menjalankan fork untuk mengeksekusi perintah `ps aux`. Kedua yaitu membuat pipe kedua dan menjalankan fork untuk mengeksekusi perintah `sort -nrk 3,3`. Lalu terakhir yaitu menjalankan fork untuk mengeksekusi perintah `head -5`.
+
+berikut merupakan tampilan saat menjalankan program soal2c:
+
+![image](https://user-images.githubusercontent.com/40484843/119246524-82e8dc80-bbac-11eb-9a00-a54d9a712486.png)
+
+### **Kendala pengerjaan No.2:**
+1. Kendala untuk soal no 2a adalah kesulitan untuk menyimpan matriks pada shared memory karena berbentuk matriks 2 dimensi
+2. Kendala untuk soal no 2b adalah kesulitan untuk membuat thread untuk tiap cell pada matriks, karena itu membutuhkan banyak thread.
+3. Kendala untuk soal no 2c adalah saat program dijalankan, program tersebut tidak langsung menutup dan harus di terminate secara manual. Untuk masalah ini sudah terselesaikan dengan melakukan terminate dalam program(revisi)
 
 ### **Soal No. 3**
 
