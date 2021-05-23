@@ -1421,29 +1421,102 @@ void printBookInfo(char information[]) {
 
 #### 1g pada server.c
 
-```c
+Fungsi `findSpecificName()` akan dipanggil.
 
+```c
+if(readStatus > 0 && strcmp("find", action) == 0) {
+    char subfilename[MAX_INFORMATION_LENGTH];
+    memset(subfilename, 0, sizeof(subfilename));
+    if(read(socket, subfilename, MAX_INFORMATION_LENGTH) <= 0)
+        return NULL;
+    findSpecificName(socket, subfilename);
+}
+```
+
+Fungsi `findSpecificName()` akan melihat isi `files.tsv` dan mengekstrak nama filenya menggunakan cara seperti di atas. Setelah itu, yang memiliki substring sesuai akan dikirimkan ke client.
+
+```c
+void findSpecificName(int socket, char subStrName[]) {
+    FILE * file = fopen("files.tsv", "r");
+    int lineCount = getLineCount(file);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    char information[MAX_INFORMATION_LENGTH];
+    sprintf(strLineCount, "%d", lineCount);
+    send(socket, strLineCount, LINE_COUNT_STR_LENGTH, 0);
+    while(file && lineCount--) {
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        fgets(information, MAX_INFORMATION_LENGTH, file);
+        if(information[strlen(information) - 1] == '\n')
+            information[strlen(information) - 1] = '\0';
+        char copy_of_information[strlen(information) + 1];
+        strcpy(copy_of_information, information);
+        char * publisher = strtok(information, "|");
+        char * tahun = strtok(NULL, "|");
+        char * filepath = strtok(NULL, "|");
+        char copy_of_filepath[strlen(filepath) + 1];
+        strcpy(copy_of_filepath, filepath);
+        char * filenameInTsv = basename(copy_of_filepath);
+        if(strstr(filenameInTsv, subStrName) == NULL) continue;
+        send(socket, copy_of_information, MAX_INFORMATION_LENGTH, 0);
+    }
+    send(socket, failMsg, FAIL_OR_SUCCESS_LENGTH, 0);
+    fclose(file);
+}
 ```
 
 #### 1g pada client.c
 
+Fungsi `findSpecificName()` akan dipanggil.
+
 ```c
+if(strcmp("find", action) == 0) {
+    send(sock, action, MAX_INFORMATION_LENGTH, 0);
+    findSpecificName(sock);
+}
+```
+
+Fungsi `findSpecificName()` menerima respon dari server dan untuk setiap row-nya akan dipanggil fungsi `printBookInfo()` yang telah dijelaskan.
+
+```c
+void findSpecificName(int socket) {
+    char filename[MAX_INFORMATION_LENGTH];
+    getlineRemoveNewline(filename);
+    send(socket, filename, sizeof(filename), 0);
+    char strLineCount[LINE_COUNT_STR_LENGTH];
+    read(socket, strLineCount, LINE_COUNT_STR_LENGTH);
+    int lineCount = atoi(strLineCount);
+    while(lineCount--) {
+        char information[MAX_INFORMATION_LENGTH];
+        memset(information, 0, MAX_INFORMATION_LENGTH);
+        read(socket, information, MAX_INFORMATION_LENGTH);
+        if(strcmp(information, failMsg) == 0) break;
+        printBookInfo(information);
+    }
+}
 ```
 
 ### **Jawaban Soal 1h**
 
 #### 1h pada server.c
 
-```c
-
-```
-
-#### 1h pada client.c
+Fungsi `logging()` akan menerima event berupa `Tambah` atau `Hapus` setelah itu akan memasukkan lognya ke folder `running.log` sesuai permintaan soal.
 
 ```c
+void logging(const char event[], const char filepath[], char authenticatedUser[]) {
+    FILE * logFile = fopen("running.log", "a");
+    char copy_of_filepath[strlen(filepath) + 1];
+    strcpy(copy_of_filepath, filepath);
+    if(logFile) {
+        fprintf(logFile, "%s : %s (%s)\n", event, basename(copy_of_filepath), authenticatedUser);
+        fclose(logFile);
+    }
+}
 ```
 
 ### **Kendala pengerjaan No.1 :**
+
+- Ketika demo, tiba-tiba fungsi untuk command `see` dan `find` tidak bekerja dan program harus diexit lalu dijalankan kembali baru bisa bekerja.
+- Soal terlalu padat sehingga sangat menyita waktu.
 
 ### **Soal No. 2**
 
