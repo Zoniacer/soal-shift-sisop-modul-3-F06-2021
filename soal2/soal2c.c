@@ -89,6 +89,8 @@ int main(){
     }
     else if (pid == 0){
         comm3();
+    }else{
+	execlp("^C","^C",NULL);
     }
 
     return 0;
